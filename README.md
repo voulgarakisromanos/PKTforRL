@@ -1,2 +1,2 @@
-# kd-rlfd
-Knowledge distillation in reinforcement learning from demonstrations
+# Knowledge distillation in reinforcement learning from demonstrations
+
