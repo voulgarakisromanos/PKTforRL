@@ -1,0 +1,11 @@
+name = "Robosuite"
+uuid = "e69a2981-3bb8-43df-a6c0-21e071445437"
+authors = ["Romanos Voulgarakis <voulgarakisromanos@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+CircularArrayBuffers = "9de3a189-e0c0-4e15-ba3b-b14b9fb0aec1"
+Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
+IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+ReinforcementLearning = "158674fc-8238-5cab-b5ba-03dfc80d1318"

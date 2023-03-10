@@ -1,0 +1,12 @@
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+*.so
+.CondaPkg
+images/
+log/
+.vscode/
+*.wbproj
+old_logs/
+/collected_datasets
+/agents
