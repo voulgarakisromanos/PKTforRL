@@ -5,10 +5,12 @@ using BSON
 using IntervalSets
 using TensorBoardLogger
 using Logging  
+using Robosuite
 
 include("../utilities/CombinedTrajectory.jl")
 include("../models/network_definitions.jl")
 include("../../src/utilities/hooks.jl")
+include("../algorithms/TwinDelayedDDPGfromDemos.jl")
 
 image_size = 64;
 frame_size = 3;
@@ -33,26 +35,26 @@ trajectory = CombinedTrajectory(CircularArraySARTTrajectory(
 agent = Agent(
     policy = TwinDelayedDDPGPolicy(
         behavior_actor = NeuralNetworkApproximator(
-            model = create_actor(),
+            model = create_actor(visual),
             optimizer = ADAM(1e-4),
-        ) |> gpu,
+        ),
         behavior_critic = NeuralNetworkApproximator(
-            model = create_critic(),
+            model = create_critic(visual),
             optimizer = ADAM(1e-4),
-        ) |> gpu,
+        ),
         target_actor = NeuralNetworkApproximator(
-            model = create_actor(),
+            model = create_actor(visual),
             optimizer = ADAM(1e-4),
-        ) |> gpu,
+        ),
         target_critic = NeuralNetworkApproximator(
-            model = create_critic(),
+            model = create_critic(visual),
             optimizer = ADAM(1e-4),
-        ) |> gpu,
+        ),
+        start_policy = RandomPolicy(Space([-1.0..1.0 for i=1:na]); rng = rng),
         γ = 0.99f0,
         ρ = 0.99f0,
-        batch_size = 256,
+        batch_size = 512,
         start_steps = 5500,
-        start_policy = RandomPolicy(Space([-1.0..1.0 for i=1:na]); rng = rng),
         pretraining_steps = 10000,
         update_freq = 1,
         policy_freq = 2,

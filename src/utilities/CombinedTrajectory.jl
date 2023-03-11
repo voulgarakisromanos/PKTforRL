@@ -1,4 +1,6 @@
 using StatsBase
+using ReinforcementLearning
+using Random
 
 function combine_named_tuples(tuple1, tuple2)
     @assert keys(tuple1)==keys(tuple2)
