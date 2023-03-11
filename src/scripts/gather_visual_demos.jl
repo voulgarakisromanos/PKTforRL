@@ -6,7 +6,7 @@ include("../utilities/hooks.jl")
 include("../utilities/utils.jl")
 
 image_size = 64
-env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=true, show=true, horizon=200, image_size=image_size)
+env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=false, show=true, horizon=200, image_size=image_size)
 
 BSON.@load "agents/groundtruth/Lift" agent
 
