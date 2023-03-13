@@ -8,8 +8,9 @@ using Logging
 using Robosuite
 
 include("../utilities/CombinedTrajectory.jl")
+include("../utilities/hooks.jl")
+include("../utilities/utils.jl")
 include("../models/network_definitions.jl")
-include("../../src/utilities/hooks.jl")
 include("../algorithms/TwinDelayedDDPGfromDemos.jl")
 
 image_size = 64;
@@ -17,12 +18,15 @@ frame_size = 3;
 visual = true;
 
 rng = StableRNG(123);
-env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=visual, show=true, horizon=200, image_size=image_size)
+env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
 
 na = env.degrees_of_freedom;
-ns = size(env.proprioception_state)[1]+size(env.object_state)[1]
 
 init = glorot_uniform(rng)
+
+BSON.@load "datasets/lift_demo.bson" hook
+
+hook = efficient_to_stacked(hook, frame_size=3)
 
 demo_trajectory = hook.t
 
@@ -54,8 +58,8 @@ agent = Agent(
         γ = 0.99f0,
         ρ = 0.99f0,
         batch_size = 256,
-        start_steps = 5500,
-        pretraining_steps = 10,
+        start_steps = 0,
+        pretraining_steps = 40_000,
         update_freq = 1,
         policy_freq = 2,
         target_act_limit = 1.0,
@@ -64,8 +68,8 @@ agent = Agent(
         act_noise = 0.1,
         rng = rng,
         q_bc_weight = 1.0f0,
-        critic_l2_weight = 1.0f-5,
-        actor_l2_weight = 1.0f-5,
+        critic_l2_weight = 1.0f-6,
+        actor_l2_weight = 1.0f-6,
         representation_weight = 0.0f0,
         logger=TBLogger("log/TD3fromDemonstrations", min_level = Logging.Info)
     ),
@@ -76,6 +80,9 @@ stop_condition = StopAfterStep(10_000, is_show_progress=!haskey(ENV, "CI"));
 
 hook = TotalRewardPerEpisode()
 
-# pretrain(agent, 10)
-
 run(agent, env, stop_condition, hook)
+
+actor = agent.policy.behavior_actor.model |> cpu
+critic = agent.policy.behavior_critic.model.critic_nets[1] |> cpu
+actor_critic_agent = ActorCriticPolicy{false}(actor, critic);
+BSON.@save "agents/visual/lift_visual.bson" actor_critic_agent

@@ -102,7 +102,8 @@ function RLBase.state(env::RoboticEnv{T,false}) where {T<:Number}
 end
 
 function RLBase.state(env::RoboticEnv{T,true}) where {T<:Number}
-    return (env.image_buffer,env.proprioception_state)
+    # return (env.image_buffer,env.proprioception_state)
+    return env.image_buffer
 end
 
 function RLBase.reset!(env::RoboticEnv)

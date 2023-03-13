@@ -142,7 +142,6 @@ function TwinDelayedDDPGPolicy(;
     )
 end
 
-# TODO: handle Training/Testing mode
 function (p::TwinDelayedDDPGPolicy)(env)
     if p.update_step <= p.start_steps
         p.start_policy(env)
@@ -167,7 +166,6 @@ function training_step(p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory)
 
     _, main_batch = main_sampler(traj.main_trajectory)
     _, demo_batch = demo_sampler(traj.demo_trajectory)
-
     full_batch = combine_named_tuples(main_batch, demo_batch)
     update!(p, full_batch, demo_batch)
 end
