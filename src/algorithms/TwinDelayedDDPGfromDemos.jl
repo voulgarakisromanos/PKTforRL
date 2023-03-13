@@ -155,6 +155,29 @@ function (p::TwinDelayedDDPGPolicy)(env)
     end
 end
 
+function training_step(p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory)
+    p.update_step % p.update_freq == 0 || return
+    length(traj) > (p.batch_size) || return
+
+    demo_sample_length = Int(round(traj.ratio * p.batch_size))
+    main_sample_length = p.batch_size - demo_sample_length
+
+    demo_sampler = BatchSampler{SARTS}(demo_sample_length)
+    main_sampler = BatchSampler{SARTS}(main_sample_length)
+
+    _, main_batch = main_sampler(traj.main_trajectory)
+    _, demo_batch = demo_sampler(traj.demo_trajectory)
+
+    full_batch = combine_named_tuples(main_batch, demo_batch)
+    update!(p, full_batch, demo_batch)
+end
+
+function pretraining_step(p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory)
+    sampler = BatchSampler{SARTS}(p.batch_size)
+    _, demo_batch = sampler(traj.demo_trajectory)
+    update!(p, demo_batch, demo_batch)
+end
+
 function RLBase.update!(
     p::TwinDelayedDDPGPolicy,
     traj::CombinedTrajectory,
@@ -164,29 +187,9 @@ function RLBase.update!(
     p.update_step += 1
 
     if p.update_step > p.pretraining_steps  # Sampling mix of demonstrations and acquired transitions
-
-        p.update_step % p.update_freq == 0 || return
-        length(traj) > (p.start_steps - p.pretraining_steps) || return
-
-        demo_sample_length = Int(round(traj.ratio * p.batch_size))
-        main_sample_length = p.batch_size - demo_sample_length
-
-        demo_sampler = BatchSampler{SARTS}(demo_sample_length)
-        main_sampler = BatchSampler{SARTS}(main_sample_length)
-
-        _, main_batch = main_sampler(traj.main_trajectory)
-        _, demo_batch = demo_sampler(traj.demo_trajectory)
-
-        full_batch = combine_named_tuples(main_batch, demo_batch)
-        update!(p, full_batch, demo_batch)
-
+        training_step(p, traj)
     elseif p.update_step <= p.pretraining_steps # Pretraining
-
-        println("Pretraining: ", p.update_step, "/", p.pretraining_steps)
-        sampler = BatchSampler{SARTS}(p.batch_size)
-        _, demo_batch = sampler(traj.demo_trajectory)
-        update!(p, demo_batch, demo_batch)
-
+        pretraining_step(p, traj) 
     end
 
     if !isnothing(p.logger)
@@ -262,8 +265,8 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple{SARTS}, demo
     p.replay_counter += 1
 end
 
-function pretrain(agent::AbstractPolicy)
-    for step = 1:agent.policy.pretraining_steps-1
-        update!(agent.policy, agent.trajectory, env, PRE_ACT_STAGE)
+function pretrain(agent::AbstractPolicy, steps::Int)
+    for step = 1:steps
+        pretraining_step(agent.policy, agent.trajectory) 
     end
 end

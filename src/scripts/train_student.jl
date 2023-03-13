@@ -53,9 +53,9 @@ agent = Agent(
         start_policy = RandomPolicy(Space([-1.0..1.0 for i=1:na]); rng = rng),
         γ = 0.99f0,
         ρ = 0.99f0,
-        batch_size = 512,
+        batch_size = 256,
         start_steps = 5500,
-        pretraining_steps = 10000,
+        pretraining_steps = 10,
         update_freq = 1,
         policy_freq = 2,
         target_act_limit = 1.0,
@@ -64,8 +64,8 @@ agent = Agent(
         act_noise = 0.1,
         rng = rng,
         q_bc_weight = 1.0f0,
-        critic_l2_weight = 0.0f0,
-        actor_l2_weight = 0.0f0,
+        critic_l2_weight = 1.0f-5,
+        actor_l2_weight = 1.0f-5,
         representation_weight = 0.0f0,
         logger=TBLogger("log/TD3fromDemonstrations", min_level = Logging.Info)
     ),
@@ -74,13 +74,8 @@ agent = Agent(
 
 stop_condition = StopAfterStep(10_000, is_show_progress=!haskey(ENV, "CI"));
 
-# hook = TotalRewardPerEpisode()
+hook = TotalRewardPerEpisode()
 
-# hook = SampleTrajectory(CircularArraySARTTrajectory(
-#     capacity = 30000,
-#     action = Float32 => (na,),
-#     state = Vector{Float32} => (ns,),
-# ))
+# pretrain(agent, 10)
 
-pretrain(agent)
-# run(agent, env, stop_condition, hook)
+run(agent, env, stop_condition, hook)
