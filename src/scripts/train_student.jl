@@ -31,7 +31,7 @@ hook = efficient_to_stacked(hook, frame_size=3)
 demo_trajectory = hook.t
 
 trajectory = CombinedTrajectory(CircularArraySARTTrajectory(
-    capacity = 100_000,
+    capacity = 300_000,
     state = Vector{Float32} => (image_size,image_size, frame_size),
     action = Vector{Float32} => (na,),
 ), demo_trajectory, 0.25)
@@ -76,7 +76,7 @@ agent = Agent(
     trajectory = trajectory
 );
 
-stop_condition = StopAfterStep(10_000, is_show_progress=!haskey(ENV, "CI"));
+stop_condition = StopAfterStep(1_000_000, is_show_progress=!haskey(ENV, "CI"));
 
 hook = TotalRewardPerEpisode()
 
