@@ -10,7 +10,7 @@ env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=tr
 
 BSON.@load "agents/groundtruth/Lift" agent
 
-stop_condition = StopAfterStep(10_000, is_show_progress=!haskey(ENV, "CI"));
+stop_condition = StopAfterStep(10, is_show_progress=!haskey(ENV, "CI"));
 
 hook = EfficientFramesHook(CircularArraySARTTrajectory(
     capacity = 30000,
@@ -22,6 +22,6 @@ actor_critic_agent = ActorCriticPolicy{false}(agent[:actor], agent[:critic]);
 
 run(actor_critic_agent, env, stop_condition, hook)
 
-BSON.@save "datasets/lift_demo.bson" hook
+# BSON.@save "datasets/lift_demo.bson" hook
 
 hook = efficient_to_stacked(hook, frame_size=3)

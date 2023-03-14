@@ -52,7 +52,6 @@ mutable struct TwinDelayedDDPGPolicy{
     actor_bc_loss::Float32
     actor_l2_loss::Float32
     representation_loss::Float32
-    logger
 end
 
 """
@@ -102,7 +101,6 @@ function TwinDelayedDDPGPolicy(;
     critic_l2_weight=1.0,
     actor_l2_weight=1.0,
     representation_weight=1.0,
-    logger=nothing
 )
     copyto!(behavior_actor, target_actor)  # force sync
     copyto!(behavior_critic, target_critic)  # force sync
@@ -138,7 +136,6 @@ function TwinDelayedDDPGPolicy(;
         0.0f0,
         0.0f0,
         0.0f0,
-        logger
     )
 end
 
@@ -189,13 +186,6 @@ function RLBase.update!(
     elseif p.update_step <= p.pretraining_steps # Pretraining
         pretraining_step(p, traj) 
     end
-
-    if !isnothing(p.logger)
-        with_logger(p.logger) do
-            @info "losses" p.critic_loss p.critic_q_loss p.critic_l2_loss p.actor_loss p.actor_q_loss p.actor_bc_loss p.actor_l2_loss
-        end
-    end
-
 end
 
 function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple{SARTS}, demo_batch::NamedTuple{SARTS})

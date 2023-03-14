@@ -29,9 +29,6 @@ end
 
 function (hook::EfficientFramesHook)(::PostActStage, agent, env)
     push!(hook.t, reward=reward(env), terminal=is_terminated(env))
-    # if reward(env) == 0  # keep only important transitions
-    #     pop!(hook.t) 
-    # end
 end
 
 
@@ -69,4 +66,24 @@ end
 
 function (hook::StateImageTransition)(::PostActStage, agent, env)
     push!(hook.t, reward=reward(env), terminal=is_terminated(env))
+end
+
+
+function tensorboard_hook(agent, tf_log_dir="logs/Lift")
+    lg = TBLogger(tf_log_dir, min_level = Logging.Info)
+    total_reward_per_episode = TotalRewardPerEpisode()
+    total_reward_per_episode.rewards = [0.0]
+    hook = ComposedHook(
+        total_reward_per_episode,
+        DoEveryNStep() do t, agent, env
+            with_logger(lg) do
+                @info  "losses" agent.policy.critic_loss agent.policy.critic_q_loss agent.policy.critic_l2_loss agent.policy.actor_loss agent.policy.actor_q_loss agent.policy.actor_bc_loss agent.policy.actor_l2_loss 
+            end
+        end,
+        DoEveryNEpisode() do t, agent, env
+            with_logger(lg) do
+                @info  "reward" total_reward_per_episode.rewards[end]
+            end
+        end
+    )
 end

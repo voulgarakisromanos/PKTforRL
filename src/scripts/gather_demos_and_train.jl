@@ -1,11 +1,12 @@
 using ReinforcementLearning
 using StableRNGs
+using Robosuite
 using Flux
 using BSON
 using IntervalSets
 using TensorBoardLogger
-using Logging  
-using Robosuite
+using Logging 
+using CircularArrayBuffers
 
 include("../utilities/CombinedTrajectory.jl")
 include("../utilities/hooks.jl")
@@ -16,17 +17,25 @@ include("../algorithms/TwinDelayedDDPGfromDemos.jl")
 image_size = 64;
 frame_size = 3;
 visual = true;
-
-rng = StableRNG(123);
 env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
 
+BSON.@load "agents/groundtruth/Lift" agent
+
+stop_condition = StopAfterStep(10_000, is_show_progress=!haskey(ENV, "CI"));
+
+hook = SampleTrajectory(CircularArraySARTTrajectory(
+    capacity = 30000,
+    state = Vector{Float32} => (image_size,image_size,3),
+    action = Vector{Float32} => (7,)
+))
+
+actor_critic_agent = ActorCriticPolicy{false}(agent[:actor], agent[:critic]);
+
+run(actor_critic_agent, env, stop_condition, hook)
+
+rng = StableRNG(123);
 na = env.degrees_of_freedom;
-
 init = glorot_uniform(rng)
-
-BSON.@load "datasets/lift_demo.bson" hook
-
-hook = efficient_to_stacked(hook, frame_size=3)
 
 demo_trajectory = hook.t
 
@@ -76,11 +85,11 @@ agent = Agent(
 );
 
 stop_condition = StopAfterStep(300_000, is_show_progress=!haskey(ENV, "CI"));
-hook = tensorboard_hook(agent, tf_log_dir="logs/Lift")
+hook = tensorboard_hook(agent, "logs/Lift")
 
 run(agent, env, stop_condition, hook)
 
 actor = agent.policy.behavior_actor.model |> cpu
 critic = agent.policy.behavior_critic.model.critic_nets[1] |> cpu
-actor_critic_agent = ActorCriticPolicy{false}(actor, critic);
-BSON.@save "agents/visual/lift_visual.bson" actor_critic_agent
+visual_agent = ActorCriticPolicy{false}(actor, critic);
+BSON.@save "agents/visual/lift_visual.bson" visual_agent

@@ -106,11 +106,14 @@ function RLBase.state(env::RoboticEnv{T,true}) where {T<:Number}
     return env.image_buffer
 end
 
-function RLBase.reset!(env::RoboticEnv)
+function RLBase.reset!(env::RoboticEnv{T}) where {T<:Number}
     env.ptr.reset()
     env.reward = typeof(env.reward)(0)
     env.done = false
     env.timestep = 0
+    for i=1:env.frame_stack_size
+        env(T.(zeros(env.degrees_of_freedom)))
+    end
 end
 
 Base.close(env::RoboticEnv) = env.ptr.close()
