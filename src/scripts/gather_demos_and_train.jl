@@ -91,5 +91,5 @@ run(agent, env, stop_condition, hook)
 
 actor = agent.policy.behavior_actor.model |> cpu
 critic = agent.policy.behavior_critic.model.critic_nets[1] |> cpu
-visual_agent = ActorCriticPolicy{false}(actor, critic);
+visual_agent = ActorCriticPolicy{true}(actor, critic);
 BSON.@save "agents/visual/lift_visual.bson" visual_agent

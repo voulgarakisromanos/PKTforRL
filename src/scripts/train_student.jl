@@ -76,7 +76,7 @@ agent = Agent(
 );
 
 stop_condition = StopAfterStep(300_000, is_show_progress=!haskey(ENV, "CI"));
-hook = tensorboard_hook(agent, tf_log_dir="logs/Lift")
+hook = tensorboard_hook(agent, "logs/Lift")
 
 run(agent, env, stop_condition, hook)
 

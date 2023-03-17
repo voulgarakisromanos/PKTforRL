@@ -6,7 +6,7 @@ struct ActorCriticPolicy{visual_agent} <: AbstractPolicy
 end
 
 (policy::ActorCriticPolicy{false})(env) = policy.actor(vcat(vec(env.proprioception_state), vec(env.object_state)))
-(policy::ActorCriticPolicy{true})(env) = policy.actor(state(env))
+(policy::ActorCriticPolicy{true})(env) = vec(policy.actor(Flux.unsqueeze(state(env), dims=4)))
 
 struct CombineActionImageEmbedding{T,F}
     layers::T
