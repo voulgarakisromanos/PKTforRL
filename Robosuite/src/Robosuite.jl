@@ -22,9 +22,10 @@ mutable struct RoboticEnv{T<:AbstractFloat,enable_visual} <: AbstractEnv
     frame_stack_size::Int
     timestep::Int
     horizon::Int
+    stop_when_done::Bool
 end
 
-function RoboticEnv(; name="Lift", robots="Panda", controller="OSC_POSE", show=false, T=Float32, enable_visual=false, horizon=500, image_size=84, frame_stack_size=3, control_freq=20)
+function RoboticEnv(; name="Lift", robots="Panda", controller="OSC_POSE", show=false, T=Float32, enable_visual=false, horizon=500, image_size=84, frame_stack_size=3, control_freq=20, stop_when_done=false)
     suite = pyimport("robosuite")
     config = suite.load_controller_config(default_controller=controller)
     ptr = suite.make(
@@ -53,7 +54,7 @@ function RoboticEnv(; name="Lift", robots="Panda", controller="OSC_POSE", show=f
     object_state = Vector{T}(undef, object_size)
     reward = T(0)
     done = false
-    return RoboticEnv{T,enable_visual}(ptr, enable_visual, show, degrees_of_freedom, image_buffer, proprioception_state, object_state, reward, done, frame_stack_size, 0, horizon)
+    return RoboticEnv{T,enable_visual}(ptr, enable_visual, show, degrees_of_freedom, image_buffer, proprioception_state, object_state, reward, done, frame_stack_size, 0, horizon, stop_when_done)
 end
 
 function common_env_procedure(env::RoboticEnv{T}, action::Vector) where {T}
@@ -62,8 +63,8 @@ function common_env_procedure(env::RoboticEnv{T}, action::Vector) where {T}
     env.done = pyconvert(Bool, done)
     if env.timestep > env.horizon || env.reward < 1e-5
         env.done = true
-    # elseif env.reward == 1.0
-    #     env.done = true
+    elseif env.reward == 1.0 && env.stop_when_done 
+        env.done = true
         # env.reward = env.horizon - env.timestep
     end
     env.proprioception_state = pyconvert(Vector{T}, obs["robot0_proprio-state"])
