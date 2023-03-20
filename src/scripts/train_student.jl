@@ -16,9 +16,11 @@ include("../algorithms/TwinDelayedDDPGfromDemos.jl")
 image_size = 64;
 frame_size = 3;
 visual = true;
+env_name = "Lift";
+
 
 rng = StableRNG(123);
-env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
+env = RoboticEnv(name=env_name, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
 
 na = env.degrees_of_freedom;
 
@@ -26,7 +28,7 @@ init = glorot_uniform(rng)
 
 BSON.@load "datasets/lift_demo.bson" hook
 
-hook = efficient_to_stacked(hook, frame_size=3)
+# hook = efficient_to_stacked(hook, frame_size=3)
 
 demo_trajectory = hook.t
 
@@ -76,11 +78,8 @@ agent = Agent(
 );
 
 stop_condition = StopAfterStep(300_000, is_show_progress=!haskey(ENV, "CI"));
-hook = tensorboard_hook(agent, "logs/Lift")
+hook = tensorboard_hook(agent, string("logs/",env_name), save_checkpoints=true)
 
 run(agent, env, stop_condition, hook)
 
-actor = agent.policy.behavior_actor.model |> cpu
-critic = agent.policy.behavior_critic.model.critic_nets[1] |> cpu
-actor_critic_agent = ActorCriticPolicy{false}(actor, critic);
-BSON.@save "agents/visual/lift_visual.bson" actor_critic_agent
+save_agent(agent, string("agents/visual/",env_name,".bson"))
