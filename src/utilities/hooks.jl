@@ -1,5 +1,7 @@
 using ReinforcementLearning
 
+include("utils.jl")
+
 mutable struct SampleTrajectory <: AbstractHook
     t::AbstractTrajectory
 end
@@ -68,8 +70,7 @@ function (hook::StateImageTransition)(::PostActStage, agent, env)
     push!(hook.t, reward=reward(env), terminal=is_terminated(env))
 end
 
-
-function tensorboard_hook(agent, tf_log_dir="logs/Lift")
+function tensorboard_hook(agent, tf_log_dir="logs/Lift"; save_checkpoints=false, save_frequency=20_000, agent_name="agents/visual/")
     lg = TBLogger(tf_log_dir, min_level = Logging.Info)
     total_reward_per_episode = TotalRewardPerEpisode()
     total_reward_per_episode.rewards = [0.0]
@@ -79,6 +80,9 @@ function tensorboard_hook(agent, tf_log_dir="logs/Lift")
             with_logger(lg) do
                 @info  "losses" agent.policy.critic_loss agent.policy.critic_q_loss agent.policy.critic_l2_loss agent.policy.actor_loss agent.policy.actor_q_loss agent.policy.actor_bc_loss agent.policy.actor_l2_loss 
             end
+            if t % save_frequency == 0
+                save_agent(agent, string(agent_name,"_",string(t)))
+            end 
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do

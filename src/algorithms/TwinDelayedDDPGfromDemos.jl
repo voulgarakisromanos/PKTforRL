@@ -128,14 +128,7 @@ function TwinDelayedDDPGPolicy(;
         critic_l2_weight,
         actor_l2_weight,
         representation_weight,
-        0.0f0,
-        0.0f0,
-        0.0f0,
-        0.0f0,
-        0.0f0,
-        0.0f0,
-        0.0f0,
-        0.0f0,
+        zeros(Float32, 8)...
     )
 end
 

@@ -17,7 +17,9 @@ include("../algorithms/TwinDelayedDDPGfromDemos.jl")
 image_size = 64;
 frame_size = 3;
 visual = true;
-env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
+env_name = "Lift";
+
+env = RoboticEnv(name=env_name, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
 
 BSON.@load "agents/groundtruth/Lift" agent
 
@@ -85,11 +87,7 @@ agent = Agent(
 );
 
 stop_condition = StopAfterStep(300_000, is_show_progress=!haskey(ENV, "CI"));
-hook = tensorboard_hook(agent, "logs/Lift")
-
+hook = tensorboard_hook(agent, string("logs/",env_name), save_checkpoints=true)
 run(agent, env, stop_condition, hook)
 
-actor = agent.policy.behavior_actor.model |> cpu
-critic = agent.policy.behavior_critic.model.critic_nets[1] |> cpu
-visual_agent = ActorCriticPolicy{true}(actor, critic);
-BSON.@save "agents/visual/lift_visual.bson" visual_agent
+# save_agent(agent, string("agents/visual/",env_name,".bson"))

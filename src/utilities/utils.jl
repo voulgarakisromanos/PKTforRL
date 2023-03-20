@@ -24,3 +24,11 @@ function normalise_difference_image(img)
     img = img .- minimum(img)
     img = img ./ maximum(img)
 end
+
+function save_agent(policy_agent, name, visual=true)
+    actor = policy_agent.policy.behavior_actor.model |> cpu
+    critic = policy_agent.policy.behavior_critic.model.critic_nets[1] |> cpu
+    agent = ActorCriticPolicy{visual}(actor, critic);
+    BSON.@save name agent;
+end
+
