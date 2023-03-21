@@ -6,6 +6,7 @@ using IntervalSets
 using TensorBoardLogger
 using Logging  
 using Robosuite
+using CircularArrayBuffers
 
 include("../utilities/CombinedTrajectory.jl")
 include("../utilities/hooks.jl")
@@ -16,11 +17,11 @@ include("../algorithms/TwinDelayedDDPGfromDemos.jl")
 image_size = 64;
 frame_size = 3;
 visual = true;
-env_name = "Lift";
+run_name = "lift_test";
 
 
 rng = StableRNG(123);
-env = RoboticEnv(name=env_name, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
+env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
 
 na = env.degrees_of_freedom;
 
@@ -78,8 +79,8 @@ agent = Agent(
 );
 
 stop_condition = StopAfterStep(300_000, is_show_progress=!haskey(ENV, "CI"));
-hook = tensorboard_hook(agent, string("logs/",env_name), save_checkpoints=true)
+hook = tensorboard_hook(agent, string("logs/",run_name), save_checkpoints=true, agent_name=string("agents/visual/",run_name))
 
-run(agent, env, stop_condition, hook)
+pretrain_run(agent, env, stop_condition, hook)
 
-save_agent(agent, string("agents/visual/",env_name,".bson"))
+# save_agent(agent, string("agents/visual/",env_name,".bson"))

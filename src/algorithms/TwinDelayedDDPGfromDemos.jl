@@ -171,7 +171,7 @@ function RLBase.update!(
     traj::CombinedTrajectory,
     ::AbstractEnv,
     ::PreActStage,
-)
+)   
     p.update_step += 1
 
     if p.update_step > p.pretraining_steps  # Sampling mix of demonstrations and acquired transitions
@@ -249,5 +249,20 @@ end
 function pretrain(agent::AbstractPolicy, steps::Int)
     for step = 1:steps
         pretraining_step(agent.policy, agent.trajectory) 
+    end
+end
+
+function pretrain_run(
+    agent::AbstractPolicy,
+    env::AbstractEnv,
+    stop_condition = StopAfterEpisode(1),
+    hook = EmptyHook(),
+)
+    if agent.policy.update_step < agent.policy.pretraining_steps
+        update!(agent.policy, agent.trajectory, env, PRE_ACT_STAGE)
+        hook(POST_ACT_STAGE, agent, env)
+        return
+    else
+        _run(agent, env, stop_condition, hook)
     end
 end
