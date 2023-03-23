@@ -17,29 +17,3 @@ end
 Base.keys(t::CombinedTrajectory) = keys(t.main_trajectory)
 Base.length(t::CombinedTrajectory) = length(t.main_trajectory)
 Base.getindex(t::CombinedTrajectory, s::Symbol) = t.main_trajectory[s]
-
-function (s::BatchSampler)(t::CombinedTrajectory)
-    demo_sample_length = Int(round(t.ratio * s.batch_size))
-    main_sample_length = s.batch_size - demo_sample_length
-    s.cache = nothing
-    custom_s = deepcopy(s)
-    custom_s.batch_size = main_sample_length
-    _, main_samples = sample(s.rng, t.main_trajectory, custom_s)
-    custom_s.cache = nothing
-    custom_s.batch_size = demo_sample_length
-    _, demo_samples = sample(s.rng, t.demo_trajectory, custom_s)
-    return nothing, combine_named_tuples(main_samples, demo_samples)
-end
-
-function StatsBase.sample(rng::AbstractRNG, t::CombinedTrajectory, s::NStepBatchSampler)
-    demo_sample_length = Int(round(t.ratio * s.batch_size))
-    main_sample_length = s.batch_size - demo_sample_length
-    s.cache = nothing
-    custom_s = deepcopy(s)
-    custom_s.batch_size = main_sample_length
-    _, main_samples = sample(s.rng, t.main_trajectory, custom_s)
-    custom_s.cache = nothing
-    custom_s.batch_size = demo_sample_length
-    _, demo_samples = sample(s.rng, t.demo_trajectory, custom_s)
-    return nothing, combine_named_tuples(main_samples, demo_samples)
-end

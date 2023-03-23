@@ -2,60 +2,71 @@ using ReinforcementLearning
 
 include("utils.jl")
 
-mutable struct SampleTrajectory <: AbstractHook
+const SGART = (:state, :groundtruth, :action, :reward, :terminal)
+const SGARTSG = (:state, :groundtruth, :action, :reward, :terminal, :next_state, :next_groundtruth)
+
+"""
+Circular Array Trajectory with State-Groundtruth-Action-Reward traces.
+"""
+const CircularArraySGARTTrajectory = Trajectory{
+    <:NamedTuple{
+        SGART,
+        <:Tuple{
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+        },
+    },
+}
+
+CircularArraySGARTTrajectory(;
+    capacity::Int,
+    state = Int => (),
+    groundtruth = Int = (),
+    action = Int => (),
+    reward = Float32 => (),
+    terminal = Bool => (),
+) = merge(
+    CircularArrayTrajectory(; capacity = capacity + 1, state = state, groundtruth = groundtruth, action = action),
+    CircularArrayTrajectory(; capacity = capacity, reward = reward, terminal = terminal),
+)
+
+
+function fetch!(s::BatchSampler, t::CircularArraySGARTTrajectory, inds::Vector{Int})
+    batch = NamedTuple{SGARTSG}((
+        (consecutive_view(t[x], inds) for x in SGART)...,
+        consecutive_view(t[:state], inds .+ 1),
+        consecutive_view(t[:groundtruth], inds .+ 1),
+    ))
+    if isnothing(s.cache)
+        s.cache = map(batch) do x
+            convert(Array, x)
+        end
+    else
+        map(s.cache, batch) do dest, src
+            copyto!(dest, src)
+        end
+    end
+end
+
+Base.length(t::CircularArraySGARTTrajectory) = length(t[:reward])
+
+mutable struct SampleTrajectory{include_groundtruth} <: AbstractHook
     t::AbstractTrajectory
 end
 
-function (hook::SampleTrajectory)(::PreActStage, agent, env, action)
+function (hook::SampleTrajectory{false})(::PreActStage, agent, env, action)
     push!(hook.t, state=state(env), action=action)
+end
+
+function (hook::SampleTrajectory{true})(::PreActStage, agent, env, action)
+    push!(hook.t, state=state(env), groundtruth=vcat(vec(env.proprioception_state), vec(env.object_state)), action=action)
 end
 
 function (hook::SampleTrajectory)(::PostActStage, agent, env)
     push!(hook.t, reward=reward(env), terminal=is_terminated(env))
-end
-
-mutable struct EfficientFramesHook <: AbstractHook
-    t::AbstractTrajectory
-end
-
-function (hook::EfficientFramesHook)(::PreActStage, agent, env, action)
-    if isempty(hook.t[:state])
-        for i = 1:size(env.image_buffer)[end]
-            push!(hook.t, state=env.image_buffer[:, :, i])
-        end
-    else
-        push!(hook.t, state=env.image_buffer[:, :, end])
-    end
-    push!(hook.t, action=action[1])
-end
-
-function (hook::EfficientFramesHook)(::PostActStage, agent, env)
-    push!(hook.t, reward=reward(env), terminal=is_terminated(env))
-end
-
-
-function efficient_to_stacked(hook::EfficientFramesHook; frame_size=4)
-    x_size, y_size, ultimate_pointer = size(hook.t[:state])
-    stacked_hook = StateImageTransition(CircularArraySARTTrajectory(
-        capacity=30000,
-        state=Vector{Float32} => (x_size, y_size, frame_size),
-        action=typeof(hook.t[:action][1]) => (size(hook.t[:action])[1],)
-    ))
-    start_pointer = 1
-    end_pointer = frame_size
-    while end_pointer <= ultimate_pointer
-        frame_array = StackFrames(Float32, x_size, y_size, frame_size)
-        for frame_index = start_pointer:end_pointer
-            frame_array(hook.t[:state][:, :, frame_index])
-        end
-        push!(stacked_hook.t, state=frame_array)
-        start_pointer += 1
-        end_pointer += 1
-    end
-    for i = 1:length(hook.t)
-        push!(stacked_hook.t, action=hook.t[:action][i], reward=hook.t[:reward][i], terminal=hook.t[:terminal][i])
-    end
-    return stacked_hook
 end
 
 mutable struct StateImageTransition <: AbstractHook
@@ -78,7 +89,7 @@ function tensorboard_hook(agent, tf_log_dir="logs/Lift"; save_checkpoints=false,
         total_reward_per_episode,
         DoEveryNStep() do t, agent, env
             with_logger(lg) do
-                @info  "losses" agent.policy.critic_loss agent.policy.critic_q_loss agent.policy.critic_l2_loss agent.policy.actor_loss agent.policy.actor_q_loss agent.policy.actor_bc_loss agent.policy.actor_l2_loss 
+                @info  "losses" agent.policy.critic_loss agent.policy.critic_q_loss agent.policy.critic_l2_loss agent.policy.actor_loss agent.policy.actor_q_loss agent.policy.actor_bc_loss agent.policy.actor_l2_loss agent.policy.representation_loss
             end
             if t % save_frequency == 0
                 save_agent(agent, string(agent_name,"_",string(t)))

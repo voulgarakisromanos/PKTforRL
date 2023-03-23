@@ -19,7 +19,6 @@ frame_size = 3;
 visual = true;
 run_name = "lift_test";
 
-
 rng = StableRNG(123);
 env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
 
@@ -28,15 +27,16 @@ na = env.degrees_of_freedom;
 init = glorot_uniform(rng)
 
 BSON.@load "datasets/lift_demo.bson" hook
-
-# hook = efficient_to_stacked(hook, frame_size=3)
+BSON.@load "agents/groundtruth/Lift" agent
+teacher = agent
 
 demo_trajectory = hook.t
 
-trajectory = CombinedTrajectory(CircularArraySARTTrajectory(
+trajectory = CombinedTrajectory(CircularArraySGARTTrajectory(
     capacity = 300_000,
-    state = Vector{Float32} => (image_size,image_size, frame_size),
-    action = Vector{Float32} => (na,),
+    state = Vector{Float32} => (image_size, image_size, frame_size),
+    groundtruth = Vector{Float32} => (size(vcat(vec(env.proprioception_state), vec(env.object_state)))[1]),
+    action = Vector{Float32} => (na,)
 ), demo_trajectory, 0.25)
 
 agent = Agent(
@@ -57,6 +57,7 @@ agent = Agent(
             model = create_critic(visual),
             optimizer = ADAM(1e-4),
         ),
+        teacher = teacher,
         start_policy = RandomPolicy(Space([-1.0..1.0 for i=1:na]); rng = rng),
         γ = 0.99f0,
         ρ = 0.99f0,
@@ -73,7 +74,7 @@ agent = Agent(
         q_bc_weight = 1.0f0,
         critic_l2_weight = 1.0f-6,
         actor_l2_weight = 1.0f-6,
-        representation_weight = 0.0f0,
+        representation_weight = 0.05f0,
         ),
     trajectory = trajectory
 );
@@ -82,5 +83,3 @@ stop_condition = StopAfterStep(300_000, is_show_progress=!haskey(ENV, "CI"));
 hook = tensorboard_hook(agent, string("logs/",run_name), save_checkpoints=true, agent_name=string("agents/visual/",run_name))
 
 pretrain_run(agent, env, stop_condition, hook)
-
-# save_agent(agent, string("agents/visual/",env_name,".bson"))

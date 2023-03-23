@@ -24,6 +24,7 @@ mutable struct TwinDelayedDDPGPolicy{
     behavior_critic::BC
     target_actor::TA
     target_critic::TC
+    teacher
     γ::Float32
     ρ::Float32
     batch_size::Int
@@ -83,6 +84,7 @@ function TwinDelayedDDPGPolicy(;
     behavior_critic,
     target_actor,
     target_critic,
+    teacher,
     start_policy,
     γ=0.99f0,
     ρ=0.995f0,
@@ -100,7 +102,7 @@ function TwinDelayedDDPGPolicy(;
     q_bc_weight=1.0,
     critic_l2_weight=1.0,
     actor_l2_weight=1.0,
-    representation_weight=1.0,
+    representation_weight=1.0
 )
     copyto!(behavior_actor, target_actor)  # force sync
     copyto!(behavior_critic, target_critic)  # force sync
@@ -109,6 +111,7 @@ function TwinDelayedDDPGPolicy(;
         behavior_critic,
         target_actor,
         target_critic,
+        teacher,
         γ,
         ρ,
         batch_size,
@@ -151,17 +154,17 @@ function training_step(p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory)
     demo_sample_length = Int(round(traj.ratio * p.batch_size))
     main_sample_length = p.batch_size - demo_sample_length
 
-    demo_sampler = BatchSampler{SARTS}(demo_sample_length)
-    main_sampler = BatchSampler{SARTS}(main_sample_length)
+    demo_sampler = BatchSampler{SGARTSG}(demo_sample_length)
+    main_sampler = BatchSampler{SGARTSG}(main_sample_length)
 
-    _, main_batch = main_sampler(traj.main_trajectory)
-    _, demo_batch = demo_sampler(traj.demo_trajectory)
+    _, main_batch = main_sampler{SGARTSG}(traj.main_trajectory)
+    _, demo_batch = demo_sampler{SGARTSG}(traj.demo_trajectory)
     full_batch = combine_named_tuples(main_batch, demo_batch)
     update!(p, full_batch, demo_batch)
 end
 
 function pretraining_step(p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory)
-    sampler = BatchSampler{SARTS}(p.batch_size)
+    sampler = BatchSampler{SGARTSG}(p.batch_size)
     _, demo_batch = sampler(traj.demo_trajectory)
     update!(p, demo_batch, demo_batch)
 end
@@ -171,20 +174,21 @@ function RLBase.update!(
     traj::CombinedTrajectory,
     ::AbstractEnv,
     ::PreActStage,
-)   
+)
     p.update_step += 1
 
     if p.update_step > p.pretraining_steps  # Sampling mix of demonstrations and acquired transitions
         training_step(p, traj)
     elseif p.update_step <= p.pretraining_steps # Pretraining
-        pretraining_step(p, traj) 
+        pretraining_step(p, traj)
     end
 end
 
-function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple{SARTS}, demo_batch::NamedTuple{SARTS})
+function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple, demo_batch::NamedTuple)
     to_device(x) = send_to_device(device(p.behavior_actor), x)
-    s, a, r, t, s′ = to_device(batch)
-    s_demo, a_demo, r_demo, t_demo, s′_demo = to_device(demo_batch)
+    
+    s, gt, a, r, t, s′, gt′ = to_device(batch)
+    s_demo, gt_demo, a_demo, r_demo, t_demo, s′_demo, gt′_demo = to_device(demo_batch)
 
     actor = p.behavior_actor
     critic = p.behavior_critic
@@ -218,21 +222,23 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple{SARTS}, demo
     if p.replay_counter % p.policy_freq == 0
         gs2 = gradient(Flux.params(actor)) do
             actions = actor(s)
-            q_loss = -mean(critic(s,actions,1))
+            q_loss = -mean(critic(s, actions, 1))
             q_scale = mean(abs.(critic(s, a, 1)))
             bc_loss = mean((actor(s_demo) .- a_demo) .^ 2)
             l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(actor))
+            representation_loss = cosine_similarity_loss(actor(s), p.teacher.actor(gt))
             λ = p.q_bc_weight / (q_scale)
-            loss = λ * q_loss + bc_loss + p.actor_l2_weight * l2_loss
+            loss = λ * q_loss + bc_loss + p.actor_l2_weight * l2_loss + p.representation_weight * representation_loss
             Flux.ignore() do
                 p.actor_loss = loss
                 p.actor_q_loss = q_loss
                 p.actor_bc_loss = bc_loss
                 p.actor_l2_loss = l2_loss
+                p.representation_loss = representation_loss
             end
             loss
         end
-    
+
         update!(actor, gs2)
 
         for (dest, src) in zip(
@@ -248,15 +254,15 @@ end
 
 function pretrain(agent::AbstractPolicy, steps::Int)
     for step = 1:steps
-        pretraining_step(agent.policy, agent.trajectory) 
+        pretraining_step(agent.policy, agent.trajectory)
     end
 end
 
 function pretrain_run(
     agent::AbstractPolicy,
     env::AbstractEnv,
-    stop_condition = StopAfterEpisode(1),
-    hook = EmptyHook(),
+    stop_condition=StopAfterEpisode(1),
+    hook=EmptyHook(),
 )
     if agent.policy.update_step < agent.policy.pretraining_steps
         update!(agent.policy, agent.trajectory, env, PRE_ACT_STAGE)
