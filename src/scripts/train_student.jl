@@ -26,11 +26,11 @@ na = env.degrees_of_freedom;
 
 init = glorot_uniform(rng)
 
-BSON.@load "datasets/lift_demo.bson" hook
+BSON.@load "datasets/lift_demo.bson" dataset
 BSON.@load "agents/groundtruth/Lift" agent
 teacher = agent
 
-demo_trajectory = hook.t
+demo_trajectory = dataset
 
 trajectory = CombinedTrajectory(CircularArraySGARTTrajectory(
     capacity = 300_000,
