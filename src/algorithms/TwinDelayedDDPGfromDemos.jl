@@ -267,5 +267,5 @@ function pretrain_run(
         update!(agent.policy, agent.trajectory, env, PRE_ACT_STAGE)
         hook(POST_ACT_STAGE, agent, env)
     end
-    _run(agent, env, stop_condition, hook)
+    RLCore._run(agent, env, stop_condition, hook)
 end
