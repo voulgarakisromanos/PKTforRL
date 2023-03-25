@@ -1,5 +1,6 @@
 using ReinforcementLearning
 using StatsBase
+using Random
 
 include("utils.jl")
 
