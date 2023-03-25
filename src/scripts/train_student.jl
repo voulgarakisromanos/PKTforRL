@@ -57,7 +57,7 @@ agent = Agent(
             model = create_critic(visual),
             optimizer = ADAM(1e-4),
         ),
-        teacher = teacher,
+        teacher = teacher |> gpu,
         start_policy = RandomPolicy(Space([-1.0..1.0 for i=1:na]); rng = rng),
         γ = 0.99f0,
         ρ = 0.99f0,

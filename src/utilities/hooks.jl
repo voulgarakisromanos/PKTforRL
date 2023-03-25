@@ -1,4 +1,5 @@
 using ReinforcementLearning
+using StatsBase
 
 include("utils.jl")
 
@@ -33,6 +34,11 @@ CircularArraySGARTTrajectory(;
     CircularArrayTrajectory(; capacity = capacity, reward = reward, terminal = terminal),
 )
 
+function StatsBase.sample(rng::AbstractRNG, t::CircularArraySGARTTrajectory, s::BatchSampler)
+    inds = rand(rng, 1:length(t), s.batch_size)
+    fetch!(s, t, inds)
+    inds, s.cache
+end
 
 function fetch!(s::BatchSampler, t::CircularArraySGARTTrajectory, inds::Vector{Int})
     batch = NamedTuple{SGARTSG}((

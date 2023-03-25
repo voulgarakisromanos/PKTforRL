@@ -186,7 +186,6 @@ end
 
 function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple, demo_batch::NamedTuple)
     to_device(x) = send_to_device(device(p.behavior_actor), x)
-    
     s, gt, a, r, t, s′, gt′ = to_device(batch)
     s_demo, gt_demo, a_demo, r_demo, t_demo, s′_demo, gt′_demo = to_device(demo_batch)
 
@@ -218,7 +217,7 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple, demo_batch:
     end
 
     update!(critic, gs1)
-
+    
     if p.replay_counter % p.policy_freq == 0
         gs2 = gradient(Flux.params(actor)) do
             actions = actor(s)
@@ -226,7 +225,7 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple, demo_batch:
             q_scale = mean(abs.(critic(s, a, 1)))
             bc_loss = mean((actor(s_demo) .- a_demo) .^ 2)
             l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(actor))
-            representation_loss = cosine_similarity_loss(actor(s), p.teacher.actor(gt))
+            representation_loss = cosine_similarity_loss(actions, p.teacher.actor(gt))
             λ = p.q_bc_weight / (q_scale)
             loss = λ * q_loss + bc_loss + p.actor_l2_weight * l2_loss + p.representation_weight * representation_loss
             Flux.ignore() do
@@ -263,12 +262,10 @@ function pretrain_run(
     env::AbstractEnv,
     stop_condition=StopAfterEpisode(1),
     hook=EmptyHook(),
-)
-    if agent.policy.update_step < agent.policy.pretraining_steps
+)   
+    while agent.policy.update_step < agent.policy.pretraining_steps
         update!(agent.policy, agent.trajectory, env, PRE_ACT_STAGE)
         hook(POST_ACT_STAGE, agent, env)
-        return
-    else
-        _run(agent, env, stop_condition, hook)
     end
+    _run(agent, env, stop_condition, hook)
 end
