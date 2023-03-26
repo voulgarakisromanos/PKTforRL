@@ -156,9 +156,8 @@ function training_step(p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory)
 
     demo_sampler = BatchSampler{SGARTSG}(demo_sample_length)
     main_sampler = BatchSampler{SGARTSG}(main_sample_length)
-
-    _, main_batch = main_sampler{SGARTSG}(traj.main_trajectory)
-    _, demo_batch = demo_sampler{SGARTSG}(traj.demo_trajectory)
+    _, main_batch = main_sampler(traj.main_trajectory)
+    _, demo_batch = demo_sampler(traj.demo_trajectory)
     full_batch = combine_named_tuples(main_batch, demo_batch)
     update!(p, full_batch, demo_batch)
 end
