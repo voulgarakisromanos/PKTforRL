@@ -224,7 +224,7 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple, demo_batch:
             q_scale = mean(abs.(critic(s, a, 1)))
             bc_loss = mean((actor(s_demo) .- a_demo) .^ 2)
             l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(actor))
-            representation_loss = cosine_similarity_loss(actions, p.teacher.actor(gt))
+            representation_loss = cosine_similarity_loss(actions, p.teacher.actor[1:end-1](gt))
             λ = p.q_bc_weight / (q_scale)
             loss = λ * q_loss + bc_loss + p.actor_l2_weight * l2_loss + p.representation_weight * representation_loss
             Flux.ignore() do
