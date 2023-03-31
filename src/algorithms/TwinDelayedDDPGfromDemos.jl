@@ -156,16 +156,19 @@ function training_step(p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory)
 
     demo_sampler = BatchSampler{SGARTSG}(demo_sample_length)
     main_sampler = BatchSampler{SGARTSG}(main_sample_length)
+
     _, main_batch = main_sampler(traj.main_trajectory)
     _, demo_batch = demo_sampler(traj.demo_trajectory)
+
     full_batch = combine_named_tuples(main_batch, demo_batch)
-    update!(p, full_batch, demo_batch)
+
+    update!(p, full_batch)
 end
 
 function pretraining_step(p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory)
     sampler = BatchSampler{SGARTSG}(p.batch_size)
     _, demo_batch = sampler(traj.demo_trajectory)
-    update!(p, demo_batch, demo_batch)
+    update!(p, demo_batch)
 end
 
 function RLBase.update!(
@@ -183,10 +186,10 @@ function RLBase.update!(
     end
 end
 
-function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple, demo_batch::NamedTuple)
+function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
     to_device(x) = send_to_device(device(p.behavior_actor), x)
     s, gt, a, r, t, s′, gt′ = to_device(batch)
-    s_demo, gt_demo, a_demo, r_demo, t_demo, s′_demo, gt′_demo = to_device(demo_batch)
+    # s_demo, gt_demo, a_demo, r_demo, t_demo, s′_demo, gt′_demo = to_device(demo_batch)
 
     actor = p.behavior_actor
     critic = p.behavior_critic
@@ -220,11 +223,12 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple, demo_batch:
     if p.replay_counter % p.policy_freq == 0
         gs2 = gradient(Flux.params(actor)) do
             actions = actor(s)
+            activations = actor.model[1:end-1](s)
             q_loss = -mean(critic(s, actions, 1))
             q_scale = mean(abs.(critic(s, a, 1)))
-            bc_loss = mean((actor(s_demo) .- a_demo) .^ 2)
+            bc_loss = mean((actions .- p.teacher.actor(gt)) .^ 2)
             l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(actor))
-            representation_loss = cosine_similarity_loss(actions, p.teacher.actor[1:end-1](gt))
+            representation_loss = cosine_similarity_loss(activations, p.teacher.actor[1:end-1](gt))
             λ = p.q_bc_weight / (q_scale)
             loss = λ * q_loss + bc_loss + p.actor_l2_weight * l2_loss + p.representation_weight * representation_loss
             Flux.ignore() do
@@ -267,4 +271,65 @@ function pretrain_run(
         hook(POST_ACT_STAGE, agent, env)
     end
     RLCore._run(agent, env, stop_condition, hook)
+end
+
+
+function RLBase.update!(
+    trajectory::AbstractTrajectory,
+    ::AbstractPolicy,
+    ::AbstractEnv,
+    ::PreEpisodeStage,
+)
+    if length(trajectory) > 0
+        pop!(trajectory[:state])
+        pop!(trajectory[:action])
+        if haskey(trajectory, :legal_actions_mask)
+            pop!(trajectory[:legal_actions_mask])
+        end
+    end
+end
+
+
+function RLBase.update!(
+    trajectory::AbstractTrajectory,
+    policy::AbstractPolicy,
+    env::AbstractEnv,
+    ::PreActStage,
+    action,
+)
+    s = policy isa NamedPolicy ? state(env, nameof(policy)) : state(env)
+    push!(trajectory[:state], s)
+    push!(trajectory[:action], action)
+    if haskey(trajectory, :legal_actions_mask)
+        lasm =
+            policy isa NamedPolicy ? legal_action_space_mask(env, nameof(policy)) :
+            legal_action_space_mask(env)
+        push!(trajectory[:legal_actions_mask], lasm)
+    end
+end
+
+
+function RLBase.update!(
+    trajectory::AbstractTrajectory,
+    policy::AbstractPolicy,
+    env::AbstractEnv,
+    ::PostEpisodeStage,
+)
+    # Note that for trajectories like `CircularArraySARTTrajectory`, data are
+    # stored in a SARSA format, which means we still need to generate a dummy
+    # action at the end of an episode.
+
+    s = policy isa NamedPolicy ? state(env, nameof(policy)) : state(env)
+
+    A = policy isa NamedPolicy ? action_space(env, nameof(policy)) : action_space(env)
+    a = get_dummy_action(A)
+
+    push!(trajectory[:state], s)
+    push!(trajectory[:action], a)
+    if haskey(trajectory, :legal_actions_mask)
+        lasm =
+            policy isa NamedPolicy ? legal_action_space_mask(env, nameof(policy)) :
+            legal_action_space_mask(env)
+        push!(trajectory[:legal_actions_mask], lasm)
+    end
 end

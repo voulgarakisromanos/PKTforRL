@@ -48,7 +48,7 @@ function main()
     env = RoboticEnv(name=env, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
 
     na = env.degrees_of_freedom;
-    ns = 42
+    ns = size(vcat(vec(env.proprioception_state), vec(env.object_state)))[1]
 
     BSON.@load "datasets/lift_demo.bson" dataset
     BSON.@load "agents/groundtruth/Lift" agent
