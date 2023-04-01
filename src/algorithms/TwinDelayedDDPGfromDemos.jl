@@ -1,5 +1,6 @@
 using Statistics
 using Random
+using Robosuite: get_groundtruth_state
 
 struct TwinDelayedDDPGCritic{visual}
     critic_nets::Vector{Flux.Chain}
@@ -276,42 +277,35 @@ end
 
 function RLBase.update!(
     trajectory::AbstractTrajectory,
-    ::AbstractPolicy,
+    ::TwinDelayedDDPGPolicy,
     ::AbstractEnv,
     ::PreEpisodeStage,
 )
     if length(trajectory) > 0
         pop!(trajectory[:state])
         pop!(trajectory[:action])
-        if haskey(trajectory, :legal_actions_mask)
-            pop!(trajectory[:legal_actions_mask])
-        end
+        pop!(trajectory[:groundtruth])
     end
 end
 
 
 function RLBase.update!(
     trajectory::AbstractTrajectory,
-    policy::AbstractPolicy,
+    policy::TwinDelayedDDPGPolicy,
     env::AbstractEnv,
     ::PreActStage,
     action,
 )
-    s = policy isa NamedPolicy ? state(env, nameof(policy)) : state(env)
+    s = state(env)
     push!(trajectory[:state], s)
     push!(trajectory[:action], action)
-    if haskey(trajectory, :legal_actions_mask)
-        lasm =
-            policy isa NamedPolicy ? legal_action_space_mask(env, nameof(policy)) :
-            legal_action_space_mask(env)
-        push!(trajectory[:legal_actions_mask], lasm)
-    end
+    push!(trajectory[:groundtruth], get_groundtruth_state(env))
 end
 
 
 function RLBase.update!(
     trajectory::AbstractTrajectory,
-    policy::AbstractPolicy,
+    policy::TwinDelayedDDPGPolicy,
     env::AbstractEnv,
     ::PostEpisodeStage,
 )
@@ -319,17 +313,11 @@ function RLBase.update!(
     # stored in a SARSA format, which means we still need to generate a dummy
     # action at the end of an episode.
 
-    s = policy isa NamedPolicy ? state(env, nameof(policy)) : state(env)
-
-    A = policy isa NamedPolicy ? action_space(env, nameof(policy)) : action_space(env)
+    s = state(env)
+    A = action_space(env)
     a = get_dummy_action(A)
 
     push!(trajectory[:state], s)
     push!(trajectory[:action], a)
-    if haskey(trajectory, :legal_actions_mask)
-        lasm =
-            policy isa NamedPolicy ? legal_action_space_mask(env, nameof(policy)) :
-            legal_action_space_mask(env)
-        push!(trajectory[:legal_actions_mask], lasm)
-    end
+    push!(trajectory[:groundtruth], get_groundtruth_state(env))
 end

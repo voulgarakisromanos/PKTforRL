@@ -117,6 +117,8 @@ function RLBase.reset!(env::RoboticEnv{T}) where {T<:Number}
     end
 end
 
+get_groundtruth_state(env::RoboticEnv) = vcat(vec(env.proprioception_state), vec(env.object_state))
+
 Base.close(env::RoboticEnv) = env.ptr.close()
 Base.show(env::RoboticEnv) = env.ptr.render()
 
