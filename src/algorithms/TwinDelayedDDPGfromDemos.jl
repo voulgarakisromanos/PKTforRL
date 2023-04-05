@@ -205,12 +205,14 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
     a′ = clamp.(p.target_actor(s′) + target_noise, -p.act_limit, p.act_limit)
     q_1′, q_2′ = p.target_critic(s′, a′)
     y = r .+ p.γ .* (1 .- t) .* (min.(q_1′, q_2′) |> vec)
-
+    
     gs1 = gradient(Flux.params(critic)) do
         q1, q2 = critic(s, a)
         q_loss = Flux.mse(q1 |> vec, y) + Flux.mse(q2 |> vec, y)
         l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(critic))
-        loss = q_loss + p.critic_l2_weight * l2_loss
+        activations1, activations2 = critic.model.critic_nets[1][1:end-1]((s,a)), critic.model.critic_nets[2][1:end-1]((s,a))
+        representation_loss = cosine_similarity_loss(activations1, p.teacher.critic[1:end-1](vcat(gt,a))) + cosine_similarity_loss(activations2, p.teacher.critic[1:end-1](vcat(gt,a)))
+        loss = q_loss + p.critic_l2_weight * l2_loss + p.representation_weight * representation_loss
         Flux.ignore() do
             p.critic_loss = loss
             p.critic_q_loss = q_loss
@@ -315,7 +317,7 @@ function RLBase.update!(
 
     s = state(env)
     A = action_space(env)
-    a = get_dummy_action(A)
+    a = RLCore.get_dummy_action(A)
 
     push!(trajectory[:state], s)
     push!(trajectory[:action], a)
