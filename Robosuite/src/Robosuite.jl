@@ -65,7 +65,7 @@ function common_env_procedure(env::RoboticEnv{T}, action::Vector) where {T}
         env.done = true
     elseif env.reward == 1.0 && env.stop_when_done 
         env.done = true
-        # env.reward = env.horizon - env.timestep
+        env.reward = env.horizon - env.timestep
     end
     env.proprioception_state = pyconvert(Vector{T}, obs["robot0_proprio-state"])
     env.object_state = pyconvert(Vector{T}, obs["object-state"])
