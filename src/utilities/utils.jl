@@ -1,4 +1,5 @@
 using ReinforcementLearning
+using Distances
 
 struct ActorCriticPolicy{visual_agent} <: AbstractPolicy
     actor
@@ -57,6 +58,21 @@ function cosine_similarity_loss(student_output::AbstractArray, teacher_output::A
     teacher_similarity = teacher_similarity./(sum(teacher_similarity,dims=2) .+ ε)
 
     loss = mean(teacher_similarity .* log.((teacher_similarity .+ ε) ./ (student_similarity .+ ε)))
+
+    return loss
+end
+
+function rbf_similarity_loss(student_output::AbstractArray, teacher_output::AbstractArray, gamma)
+    # Compute RBF kernel matrices
+    K_s = exp.(-gamma * pairwise(Euclidean(), student_output, student_output))
+    K_t = exp.(-gamma * pairwise(Euclidean(), teacher_output, teacher_output))
+
+    # Normalize kernel matrices
+    K_s  = K_s ./ sqrt.(sum(K_s, dims=2) .* sum(K_s, dims=1))
+    K_t  = K_t ./ sqrt.(sum(K_t, dims=2) .* sum(K_t, dims=1))
+
+    # Compute loss
+    loss = mean(K_t .* log.((K_t .+ eps()) ./ (K_s .+ eps())))
 
     return loss
 end

@@ -45,6 +45,7 @@ mutable struct TwinDelayedDDPGPolicy{
     critic_l2_weight::Float32
     actor_l2_weight::Float32
     representation_weight::Float32
+    similarity_function::Function
     # for logging
     critic_loss::Float32
     critic_q_loss::Float32
@@ -103,7 +104,8 @@ function TwinDelayedDDPGPolicy(;
     q_bc_weight=1.0,
     critic_l2_weight=1.0,
     actor_l2_weight=1.0,
-    representation_weight=1.0
+    representation_weight=1.0,
+    similarity_function
 )
     copyto!(behavior_actor, target_actor)  # force sync
     copyto!(behavior_critic, target_critic)  # force sync
@@ -132,6 +134,7 @@ function TwinDelayedDDPGPolicy(;
         critic_l2_weight,
         actor_l2_weight,
         representation_weight,
+        similarity_function,
         zeros(Float32, 8)...
     )
 end
@@ -190,7 +193,6 @@ end
 function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
     to_device(x) = send_to_device(device(p.behavior_actor), x)
     s, gt, a, r, t, s′, gt′ = to_device(batch)
-    # s_demo, gt_demo, a_demo, r_demo, t_demo, s′_demo, gt′_demo = to_device(demo_batch)
 
     actor = p.behavior_actor
     critic = p.behavior_critic
@@ -211,7 +213,7 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
         q_loss = Flux.mse(q1 |> vec, y) + Flux.mse(q2 |> vec, y)
         l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(critic))
         activations1, activations2 = critic.model.critic_nets[1][1:end-1]((s,a)), critic.model.critic_nets[2][1:end-1]((s,a))
-        representation_loss = cosine_similarity_loss(activations1, p.teacher.critic[1:end-1](vcat(gt,a))) + cosine_similarity_loss(activations2, p.teacher.critic[1:end-1](vcat(gt,a)))
+        representation_loss = p.similarity_function(activations1, p.teacher.critic[1:end-1](vcat(gt,a))) + p.similarity_function(activations2, p.teacher.critic[1:end-1](vcat(gt,a)))
         loss = q_loss + p.critic_l2_weight * l2_loss + p.representation_weight * representation_loss
         Flux.ignore() do
             p.critic_loss = loss
@@ -231,7 +233,7 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
             q_scale = mean(abs.(critic(s, a, 1)))
             bc_loss = mean((actions .- p.teacher.actor(gt)) .^ 2)
             l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(actor))
-            representation_loss = cosine_similarity_loss(activations, p.teacher.actor[1:end-1](gt))
+            representation_loss = p.similarity_function(activations, p.teacher.actor[1:end-1](gt))
             λ = p.q_bc_weight / (q_scale)
             loss = λ * q_loss + bc_loss + p.actor_l2_weight * l2_loss + p.representation_weight * representation_loss
             Flux.ignore() do

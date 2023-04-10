@@ -25,6 +25,14 @@ function parse_commandline()
             help = "Relative weight for Q and BC losses"
             arg_type = Float32
             default = 2.5f0
+        "--gamma"
+            help = "Width for RBF-like similarity kernels"
+            arg_type = Float32
+            default = 1.0f0
+        "--similarity_function"
+            help = "RBF or cosine"
+            arg_type = String
+            default = "cosine"
     end
 
     return parse_args(s)
@@ -39,6 +47,20 @@ function main()
     representation_weight = parsed_args["repr_weight"]
     q_bc_weight = parsed_args["lambda"]
     run_name = parsed_args["run_name"]
+    kernel_width = parsed_args["gamma"]
+    similarity_function_name = parsed_args["similarity_function"]
+
+    println(kernel_width)
+    println(similarity_function_name)
+
+    if similarity_function_name == "RBF"
+        similarity_function  =  (x, y) -> rbf_similarity_loss(x, y, kernel_width)
+    elseif similarity_function_name == "cosine"
+        similarity_function = (x, y) -> cosine_similarity_loss(x, y)
+    else
+        println("No similarity loss selected")
+    end
+
 
     image_size = 64;
     frame_size = 3;
@@ -99,11 +121,12 @@ function main()
             critic_l2_weight = 1.0f-6,
             actor_l2_weight = 1.0f-6,
             representation_weight = representation_weight,
+            similarity_function = similarity_function
             ),
         trajectory = trajectory
     );
 
-    stop_condition = StopAfterStep(10000, is_show_progress=!haskey(ENV, "CI"));
+    stop_condition = StopAfterStep(100_000, is_show_progress=!haskey(ENV, "CI"));
     hook = tensorboard_hook(agent, string("logs/",run_name), save_checkpoints=true, agent_name=string("agents/visual/",run_name))
 
     pretrain_run(agent, env, stop_condition, hook)
