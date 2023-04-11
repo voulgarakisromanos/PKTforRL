@@ -1,5 +1,5 @@
 using ReinforcementLearning
-using Distances
+using Tullio
 
 struct ActorCriticPolicy{visual_agent} <: AbstractPolicy
     actor
