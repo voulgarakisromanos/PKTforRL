@@ -63,13 +63,16 @@ function cosine_similarity_loss(student_output::AbstractArray, teacher_output::A
 end
 
 function rbf_similarity_loss(student_output::AbstractArray, teacher_output::AbstractArray, gamma)
+    student_output = student_output |> cpu
+    teacher_output = teacher_output |> cpu
+
     # Compute RBF kernel matrices
-    K_s = exp.(-gamma * pairwise(Euclidean(), student_output, student_output))
-    K_t = exp.(-gamma * pairwise(Euclidean(), teacher_output, teacher_output))
+    K_s = exp.(-gamma * pairwise(SqEuclidean(), student_output, student_output))
+    K_t = exp.(-gamma * pairwise(SqEuclidean(), teacher_output, teacher_output))
 
     # Normalize kernel matrices
-    K_s  = K_s ./ sqrt.(sum(K_s, dims=2) .* sum(K_s, dims=1))
-    K_t  = K_t ./ sqrt.(sum(K_t, dims=2) .* sum(K_t, dims=1))
+    K_s  = K_s ./ sqrt.(sum(K_s, dims=2))
+    K_t  = K_t ./ sqrt.(sum(K_t, dims=2))
 
     # Compute loss
     loss = mean(K_t .* log.((K_t .+ eps()) ./ (K_s .+ eps())))

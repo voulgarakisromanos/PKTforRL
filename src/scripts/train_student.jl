@@ -50,9 +50,6 @@ function main()
     kernel_width = parsed_args["gamma"]
     similarity_function_name = parsed_args["similarity_function"]
 
-    println(kernel_width)
-    println(similarity_function_name)
-
     if similarity_function_name == "RBF"
         similarity_function  =  (x, y) -> rbf_similarity_loss(x, y, kernel_width)
     elseif similarity_function_name == "cosine"
