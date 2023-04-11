@@ -20,7 +20,7 @@ function parse_commandline()
         "--repr_weight"
             help = "Representation loss weight"
             arg_type = Float32
-            default = 0.05f0
+            default = 1.0f0
         "--lambda"
             help = "Relative weight for Q and BC losses"
             arg_type = Float32

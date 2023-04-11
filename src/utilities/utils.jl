@@ -1,5 +1,6 @@
 using ReinforcementLearning
 using Tullio
+using CUDA, CUDAKernels, KernelAbstractions
 
 struct ActorCriticPolicy{visual_agent} <: AbstractPolicy
     actor
