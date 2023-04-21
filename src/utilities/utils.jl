@@ -36,18 +36,16 @@ end
 
 function cosine_similarity_loss(student_output::AbstractArray, teacher_output::AbstractArray)
 
-    ε = 1e-7
-
     teacher_output = transpose(teacher_output)
     student_output = transpose(student_output)
 
     @assert size(teacher_output)[1] == size(student_output)[1]
 
     teacher_output_norm = sqrt.(sum(teacher_output.^2,dims=2))
-    teacher_output = teacher_output ./ (teacher_output_norm .+ ε)
+    teacher_output = teacher_output ./ (teacher_output_norm .+ eps())
 
     student_output_norm = sqrt.(sum(student_output.^2,dims=2))
-    student_output = student_output ./ (student_output_norm .+ ε)
+    student_output = student_output ./ (student_output_norm .+ eps())
 
     student_similarity = student_output * transpose(student_output)
     teacher_similarity = teacher_output * transpose(teacher_output)
@@ -55,10 +53,35 @@ function cosine_similarity_loss(student_output::AbstractArray, teacher_output::A
     student_similarity = (student_similarity .+ 1.0) ./ 2.0
     teacher_similarity = (teacher_similarity .+ 1.0) ./ 2.0
 
-    student_similarity = student_similarity./(sum(student_similarity,dims=2) .+ ε)
-    teacher_similarity = teacher_similarity./(sum(teacher_similarity,dims=2) .+ ε)
+    student_similarity = student_similarity./(sum(student_similarity,dims=2) .+ eps())
+    teacher_similarity = teacher_similarity./(sum(teacher_similarity,dims=2) .+ eps())
 
-    loss = mean(teacher_similarity .* log.((teacher_similarity .+ ε) ./ (student_similarity .+ ε)))
+    loss = mean(teacher_similarity .* log.((teacher_similarity .+ eps()) ./ (student_similarity .+ eps())))
+
+    return loss
+end
+
+function min_max_scale(X::AbstractArray)
+    mins = minimum(X, dims=1)
+    maxs = maximum(X, dims=1)
+    return (X .- mins) ./ (maxs .- mins)
+end
+
+
+function linear_similarity_loss(student_output::AbstractArray, teacher_output::AbstractArray)
+
+    teacher_output = min_max_scale(teacher_output)
+    student_output = min_max_scale(student_output)
+
+    teacher_output = transpose(teacher_output)
+    student_output = transpose(student_output)
+
+    @assert size(teacher_output)[1] == size(student_output)[1]
+
+    student_similarity = abs.(student_output * transpose(student_output))
+    teacher_similarity = abs.(teacher_output * transpose(teacher_output))
+
+    loss = mean(teacher_similarity .* log.((teacher_similarity .+ eps()) ./ (student_similarity .+ eps())))
 
     return loss
 end

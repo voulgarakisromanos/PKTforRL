@@ -51,9 +51,11 @@ function main()
     similarity_function_name = parsed_args["similarity_function"]
 
     if similarity_function_name == "RBF"
-        similarity_function  =  (x, y) -> rbf_similarity_loss(x, y, kernel_width)
+        similarity_function = (x, y) -> rbf_similarity_loss(x, y, kernel_width)
     elseif similarity_function_name == "cosine"
         similarity_function = (x, y) -> cosine_similarity_loss(x, y)
+    elseif similarity_function_name == "linear"
+        similarity_function = (x, y) -> linear_similarity_loss(x, y)
     else
         println("No similarity loss selected")
     end
