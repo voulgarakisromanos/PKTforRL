@@ -1,6 +1,7 @@
 using ReinforcementLearning
 using Tullio
 using CUDA, CUDAKernels, KernelAbstractions
+using Flux
 
 struct ActorCriticPolicy{visual_agent} <: AbstractPolicy
     actor
@@ -81,7 +82,7 @@ function linear_similarity_loss(student_output::AbstractArray, teacher_output::A
     student_similarity = abs.(student_output * transpose(student_output))
     teacher_similarity = abs.(teacher_output * transpose(teacher_output))
 
-    loss = mean(teacher_similarity .* log.((teacher_similarity .+ eps()) ./ (student_similarity .+ eps())))
+    loss = Flux.mse(teacher_similarity, student_similarity)
 
     return loss
 end
