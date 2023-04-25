@@ -71,8 +71,8 @@ function main()
     na = env.degrees_of_freedom;
     ns = size(vcat(vec(env.proprioception_state), vec(env.object_state)))[1]
 
-    BSON.@load "datasets/lift_demo.bson" dataset
-    BSON.@load "agents/groundtruth/Lift" agent
+    BSON.@load string("datasets/", env, "_demo.bson") dataset
+    BSON.@load string("agents/groundtruth/", env) agent
     teacher = agent
 
     demo_trajectory = dataset
@@ -126,7 +126,7 @@ function main()
     );
 
     stop_condition = StopAfterStep(100_000, is_show_progress=!haskey(ENV, "CI"));
-    hook = tensorboard_hook(agent, string("logs/",run_name), save_checkpoints=true, agent_name=string("agents/visual/",run_name))
+    hook = tensorboard_hook(agent, string("new_logs/",run_name), save_checkpoints=true, agent_name=string("agents/visual/",run_name))
 
     pretrain_run(agent, env, stop_condition, hook)
 end

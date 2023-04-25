@@ -7,11 +7,13 @@ include("../utilities/utils.jl")
 
 image_size = 64
 
-env = RoboticEnv(name="Lift", T=Float32, controller="OSC_POSE", enable_visual=true, show=false, horizon=200, image_size=image_size, stop_when_done=true)
+env_name = "Door"
+
+env = RoboticEnv(name=env_name, T=Float32, controller="OSC_POSE", enable_visual=true, show=false, horizon=200, image_size=image_size, stop_when_done=true)
 
 na = env.degrees_of_freedom;
 
-BSON.@load "agents/groundtruth/Lift" agent
+BSON.@load string("agents/groundtruth/", env_name) agent
 
 stop_condition = StopAfterStep(10_000, is_show_progress=!haskey(ENV, "CI"));
 
@@ -28,4 +30,4 @@ run(actor_critic_agent, env, stop_condition, hook)
 
 dataset = hook.t
 
-BSON.@save "datasets/lift_demo.bson" dataset
+BSON.@save string("datasets/", env_name, "_demo.bson") dataset
