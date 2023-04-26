@@ -212,9 +212,9 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
         q1, q2 = critic(s, a)
         q_loss = Flux.mse(q1 |> vec, y) + Flux.mse(q2 |> vec, y)
         l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(critic))
-        activations1, activations2 = critic.model.critic_nets[1][1:end-1]((s,a)), critic.model.critic_nets[2][1:end-1]((s,a))
-        representation_loss = p.similarity_function(activations1, p.teacher.critic[1:end-1](vcat(gt,a))) + p.similarity_function(activations2, p.teacher.critic[1:end-1](vcat(gt,a)))
-        loss = q_loss + p.critic_l2_weight * l2_loss + p.representation_weight * representation_loss
+        # activations1, activations2 = critic.model.critic_nets[1][1:end-1]((s,a)), critic.model.critic_nets[2][1:end-1]((s,a))
+        # representation_loss = p.similarity_function(activations1, p.teacher.critic[1:end-1](vcat(gt,a))) + p.similarity_function(activations2, p.teacher.critic[1:end-1](vcat(gt,a)))
+        loss = q_loss + p.critic_l2_weight * l2_loss # + p.representation_weight * representation_loss
         Flux.ignore() do
             p.critic_loss = loss
             p.critic_q_loss = q_loss
@@ -235,7 +235,8 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
             l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(actor))
             representation_loss = p.similarity_function(activations, p.teacher.actor[1:end-1](gt))
             λ = p.q_bc_weight / (q_scale)
-            loss = λ * q_loss + bc_loss + p.actor_l2_weight * l2_loss + p.representation_weight * representation_loss
+            annealed_representation_weight = p.representation_weight * exp.(-p.update_step * 0.0002)
+            loss = λ * q_loss + bc_loss + p.actor_l2_weight * l2_loss + annealed_representation_weight * representation_loss
             Flux.ignore() do
                 p.actor_loss = loss
                 p.actor_q_loss = q_loss
