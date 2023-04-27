@@ -88,6 +88,22 @@ function (hook::StateImageTransition)(::PostActStage, agent, env)
     push!(hook.t, reward=reward(env), terminal=is_terminated(env))
 end
 
+Base.@kwdef mutable struct SuccessRateHook <: AbstractHook
+    recent_successes::Vector{Bool} = []
+    cumulative_success_rates = []
+    num_episodes::Int = 0
+    success_criterion::Function
+    logger
+end
+
+function (hook::SuccessRateHook)(::PostEpisodeStage, agent, env)
+    hook.num_episodes += 1
+    success = hook.success_criterion()
+    push!(hook.recent_successes, success)
+    cumulative_success_rate = sum(hook.recent_successes) / hook.num_episodes
+    log_value(lg, "success_rate/cumulative_success_rate", cumulative_success_rate; step=hook.num_episodes)
+end
+
 function tensorboard_hook(agent, tf_log_dir="logs/Lift"; save_checkpoints=false, save_frequency=20_000, agent_name="agents/visual/")
     lg = TBLogger(tf_log_dir, min_level = Logging.Info)
     total_reward_per_episode = TotalRewardPerEpisode()
@@ -106,6 +122,7 @@ function tensorboard_hook(agent, tf_log_dir="logs/Lift"; save_checkpoints=false,
             with_logger(lg) do
                 @info  "reward" total_reward_per_episode.rewards[end]
             end
-        end
+        end,
+        SuccessRateHook(success_criterion=()->env.success, logger=lg)
     )
 end
