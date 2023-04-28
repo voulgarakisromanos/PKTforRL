@@ -42,7 +42,7 @@ end
 function main()
 
     parsed_args = parse_commandline()
-    env = parsed_args["env"]
+    env_name = parsed_args["env"]
     pretraining_steps = parsed_args["pre_steps"]
     representation_weight = parsed_args["repr_weight"]
     q_bc_weight = parsed_args["lambda"]
@@ -60,19 +60,18 @@ function main()
         println("No similarity loss selected")
     end
 
-
     image_size = 64;
     frame_size = 3;
     visual = true;
 
     rng = StableRNG(123);
-    env = RoboticEnv(name=env, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
+    env = RoboticEnv(name=env_name, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
 
     na = env.degrees_of_freedom;
     ns = size(vcat(vec(env.proprioception_state), vec(env.object_state)))[1]
 
-    BSON.@load string("datasets/", env, "_demo.bson") dataset
-    BSON.@load string("agents/groundtruth/", env) agent
+    BSON.@load string("datasets/", env_name, "_demo.bson") dataset
+    BSON.@load string("agents/groundtruth/", env_name) agent
     teacher = agent
 
     demo_trajectory = dataset
