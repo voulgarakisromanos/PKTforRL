@@ -23,6 +23,7 @@ mutable struct RoboticEnv{T<:AbstractFloat,enable_visual} <: AbstractEnv
     timestep::Int
     horizon::Int
     stop_when_done::Bool
+    success::Bool
 end
 
 function RoboticEnv(; name="Lift", robots="Panda", controller="OSC_POSE", show=false, T=Float32, enable_visual=false, horizon=500, image_size=84, frame_stack_size=3, control_freq=20, stop_when_done=false)
@@ -54,7 +55,8 @@ function RoboticEnv(; name="Lift", robots="Panda", controller="OSC_POSE", show=f
     object_state = Vector{T}(undef, object_size)
     reward = T(0)
     done = false
-    return RoboticEnv{T,enable_visual}(ptr, enable_visual, show, degrees_of_freedom, image_buffer, proprioception_state, object_state, reward, done, frame_stack_size, 0, horizon, stop_when_done)
+    success = false
+    return RoboticEnv{T,enable_visual}(ptr, enable_visual, show, degrees_of_freedom, image_buffer, proprioception_state, object_state, reward, done, frame_stack_size, 0, horizon, stop_when_done, success)
 end
 
 function common_env_procedure(env::RoboticEnv{T}, action::Vector) where {T}
@@ -66,6 +68,7 @@ function common_env_procedure(env::RoboticEnv{T}, action::Vector) where {T}
     elseif env.reward == 1.0 && env.stop_when_done 
         env.done = true
         env.reward = env.horizon - env.timestep
+        env.success = true
     end
     env.proprioception_state = pyconvert(Vector{T}, obs["robot0_proprio-state"])
     env.object_state = pyconvert(Vector{T}, obs["object-state"])
@@ -111,6 +114,7 @@ function RLBase.reset!(env::RoboticEnv{T}) where {T<:Number}
     env.ptr.reset()
     env.reward = typeof(env.reward)(0)
     env.done = false
+    env.success = false
     env.timestep = 0
     for i=1:env.frame_stack_size
         env(T.(zeros(env.degrees_of_freedom)))
