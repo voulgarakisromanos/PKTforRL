@@ -10,6 +10,10 @@ using TensorBoardLogger
 using Logging
 using CircularArrayBuffers
 
+include("../utilities/hooks.jl")
+include("../utilities/CombinedTrajectory.jl")
+include("../algorithms/TwinDelayedDDPGBase.jl")
+
 function tensorboard_training_hook(agent, tf_log_dir="logs/TwoArmPegInHole")
     lg = TBLogger(tf_log_dir, min_level = Logging.Info)
     total_reward_per_episode = TotalRewardPerEpisode()
@@ -29,11 +33,6 @@ function tensorboard_training_hook(agent, tf_log_dir="logs/TwoArmPegInHole")
             SuccessRateHook(success_criterion=()->env.success, logger=lg)
         )
 end
-
-include("../models/network_definitions.jl")
-include("../algorithms/TwinDelayedDDPGBase.jl")
-include("../utilities/CombinedTrajectory.jl")
-include("../utilities/hooks.jl")
 
 robots = ("Panda", "Panda")
 env = RoboticEnv(name="TwoArmPegInHole", robots=robots, T=Float32, controller="OSC_POSE", enable_visual=false, show=false, horizon=200)
@@ -96,7 +95,7 @@ agent = Agent(
     ),
 )
 
-stop_condition = StopAfterStep(2_000_000, is_show_progress=!haskey(ENV, "CI"));
+stop_condition = StopAfterStep(3_000_000, is_show_progress=!haskey(ENV, "CI"));
 
 hook = tensorboard_training_hook(agent)
 
