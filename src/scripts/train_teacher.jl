@@ -14,7 +14,8 @@ include("../utilities/hooks.jl")
 include("../utilities/CombinedTrajectory.jl")
 include("../algorithms/TwinDelayedDDPGBase.jl")
 
-function tensorboard_training_hook(agent, tf_log_dir="logs/TwoArmPegInHole")
+
+function tensorboard_groundtruth_hook(agent, tf_log_dir="logs/Lift"; save_checkpoints=true, save_frequency=10_000, agent_name="agents/groundtruth/")
     lg = TBLogger(tf_log_dir, min_level = Logging.Info)
     total_reward_per_episode = TotalRewardPerEpisode()
     total_reward_per_episode.rewards = [0.0]
@@ -24,6 +25,9 @@ function tensorboard_training_hook(agent, tf_log_dir="logs/TwoArmPegInHole")
                 with_logger(lg) do
                     @info  "losses" critic_loss = agent.policy.critic_loss  actor_loss = agent.policy.actor_loss 
                 end
+                if t % save_frequency == 0
+                    save_agent(agent, string(agent_name,"_",string(t)))
+                end 
             end,
             DoEveryNEpisode() do t, agent, env
                 with_logger(lg) do
@@ -34,8 +38,15 @@ function tensorboard_training_hook(agent, tf_log_dir="logs/TwoArmPegInHole")
         )
 end
 
-robots = ("Panda", "Panda")
-env = RoboticEnv(name="TwoArmPegInHole", robots=robots, T=Float32, controller="OSC_POSE", enable_visual=false, show=false, horizon=200)
+env_name = "Lift"
+
+if env_name == "TwoArmPegInHole"
+    robots = ("Panda", "Panda")
+else
+    robots = "Panda"
+end
+
+env = RoboticEnv(name=env_name, robots=robots, T=Float32, controller="OSC_POSE", enable_visual=false, show=false, horizon=200, stop_when_done=true)
 
 rng = StableRNG(123)
 init = glorot_uniform(rng)
@@ -77,9 +88,9 @@ agent = Agent(
         γ = 0.99f0,
         ρ = 0.95f0,
         batch_size = 2048,
-        start_steps = 1000,
+        start_steps = 50000,
         start_policy = RandomPolicy(Space([-1.0..1.0 for i=1:na]); rng = rng),
-        update_after = 1000,
+        update_after = 50000,
         update_freq = 1,
         policy_freq = 2,
         target_act_limit = 1.0,
@@ -95,12 +106,8 @@ agent = Agent(
     ),
 )
 
-stop_condition = StopAfterStep(3_000_000, is_show_progress=!haskey(ENV, "CI"));
+stop_condition = StopAfterStep(200_000, is_show_progress=!haskey(ENV, "CI"));
 
-hook = tensorboard_training_hook(agent)
+hook = tensorboard_groundtruth_hook(agent, string("logs/", env_name), save_frequency=100_000, agent_name=string("agents/groundtruth/",env_name))
 
 run(agent, env, stop_condition, hook)
-
-agent = agent |> cpu
-agent = (actor = agent.policy.behavior_actor.model, critic = agent.policy.behavior_critic.model.critic_1)
-BSON.@save "agents/groundtruth/TwoArmPegInHole" agent
