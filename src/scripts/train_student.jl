@@ -69,8 +69,14 @@ function main()
     frame_size = 3;
     visual = true;
 
+    if env_name == "TwoArmPegInHole"
+        robots = ("Panda", "Panda")
+    else
+        robots = "Panda"
+    end
+
     rng = StableRNG(123);
-    env = RoboticEnv(name=env_name, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size, stop_when_done=true)
+    env = RoboticEnv(name=env_name, robots=robots, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size, stop_when_done=true)
 
     na = env.degrees_of_freedom;
     ns = size(vcat(vec(env.proprioception_state), vec(env.object_state)))[1]
