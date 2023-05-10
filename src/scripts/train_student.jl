@@ -33,6 +33,10 @@ function parse_commandline()
             help = "RBF or cosine"
             arg_type = String
             default = "cosine"
+        "--total_steps"
+            help = "Total training steps"
+            arg_type = Int
+            default = 100_000
     end
 
     return parse_args(s)
@@ -42,13 +46,14 @@ end
 function main()
 
     parsed_args = parse_commandline()
-    env = parsed_args["env"]
+    env_name = parsed_args["env"]
     pretraining_steps = parsed_args["pre_steps"]
     representation_weight = parsed_args["repr_weight"]
     q_bc_weight = parsed_args["lambda"]
     run_name = parsed_args["run_name"]
     kernel_width = parsed_args["gamma"]
     similarity_function_name = parsed_args["similarity_function"]
+    total_steps = parsed_args["total_steps"]
 
     if similarity_function_name == "RBF"
         similarity_function = (x, y) -> rbf_similarity_loss(x, y, kernel_width)
@@ -60,19 +65,24 @@ function main()
         println("No similarity loss selected")
     end
 
-
     image_size = 64;
     frame_size = 3;
     visual = true;
 
+    if env_name == "TwoArmPegInHole"
+        robots = ("Panda", "Panda")
+    else
+        robots = "Panda"
+    end
+
     rng = StableRNG(123);
-    env = RoboticEnv(name=env, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size)
+    env = RoboticEnv(name=env_name, robots=robots, T=Float32, controller="OSC_POSE", enable_visual=visual, show=false, horizon=200, image_size=image_size, stop_when_done=true)
 
     na = env.degrees_of_freedom;
     ns = size(vcat(vec(env.proprioception_state), vec(env.object_state)))[1]
 
-    BSON.@load string("datasets/", env, "_demo.bson") dataset
-    BSON.@load string("agents/groundtruth/", env) agent
+    BSON.@load string("datasets/", env_name, "_demo.bson") dataset
+    BSON.@load string("agents/groundtruth/", env_name) agent
     teacher = agent
 
     demo_trajectory = dataset
@@ -125,8 +135,8 @@ function main()
         trajectory = trajectory
     );
 
-    stop_condition = StopAfterStep(100_000, is_show_progress=!haskey(ENV, "CI"));
-    hook = tensorboard_hook(agent, string("new_logs/",run_name), save_checkpoints=true, agent_name=string("agents/visual/",run_name))
+    stop_condition = StopAfterStep(total_steps, is_show_progress=!haskey(ENV, "CI"));
+    hook = tensorboard_hook(env, agent, string("newer_logs/",run_name), save_checkpoints=true, agent_name=string("agents/visual/",run_name))
 
     pretrain_run(agent, env, stop_condition, hook)
 end

@@ -100,10 +100,12 @@ function (hook::SuccessRateHook)(::PostEpisodeStage, agent, env)
     hook.num_episodes += 1
     success = hook.success_criterion()
     push!(hook.recent_successes, success)
+    cumulative_success_rate = sum(hook.recent_successes) / hook.num_episodes
+    log_value(hook.logger, "success_rate/cumulative_success_rate", cumulative_success_rate; step=hook.num_episodes)
     log_value(hook.logger, "success_rate/successful_episodes", sum(success); step=hook.num_episodes)
 end
 
-function tensorboard_hook(agent, tf_log_dir="logs/Lift"; save_checkpoints=false, save_frequency=20_000, agent_name="agents/visual/")
+function tensorboard_hook(env, agent, tf_log_dir="logs/Lift"; save_checkpoints=false, save_frequency=20_000, agent_name="agents/visual/")
     lg = TBLogger(tf_log_dir, min_level = Logging.Info)
     total_reward_per_episode = TotalRewardPerEpisode()
     total_reward_per_episode.rewards = [0.0]
