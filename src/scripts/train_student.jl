@@ -106,23 +106,30 @@ function main()
         action = Vector{Float32} => (na,)
     ), demo_trajectory, 0.25)
 
+    const initial_learning_rate = 1e-3
+    const final_learning_rate = 1e-5
+    const decay_steps = 30000
+    const decay_rate = -log(final_learning_rate / initial_learning_rate) / decay_steps
+
+    lr_decay = ExpDecay(initial_learning_rate, decay_rate, decay_steps, 1e-5)
+
     agent = Agent(
         policy = TwinDelayedDDPGPolicy(
             behavior_actor = NeuralNetworkApproximator(
                 model = create_actor(visual, rng, ns, na),
-                optimizer = ADAM(1e-4),
+                optimizer = Flux.Optimise.Optimiser(ADAM(), lr_decay),
             ),
             behavior_critic = NeuralNetworkApproximator(
                 model = create_critic(visual, rng, ns, na),
-                optimizer = ADAM(1e-4),
+                optimizer = Flux.Optimise.Optimiser(ADAM(), lr_decay),
             ),
             target_actor = NeuralNetworkApproximator(
                 model = create_actor(visual, rng, ns, na),
-                optimizer = ADAM(1e-4),
+                optimizer = Flux.Optimise.Optimiser(ADAM(), lr_decay),
             ),
             target_critic = NeuralNetworkApproximator(
                 model = create_critic(visual, rng, ns, na),
-                optimizer = ADAM(1e-4),
+                optimizer = Flux.Optimise.Optimiser(ADAM(), lr_decay)
             ),
             teacher = teacher |> gpu,
             start_policy = RandomPolicy(Space([-1.0..1.0 for i=1:na]); rng = rng),
