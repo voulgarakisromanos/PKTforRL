@@ -20,7 +20,7 @@ function parse_commandline()
         "--pre_steps"
             help = "Number of pretraining steps"
             arg_type = Int
-            default = 20_000
+            default = 0
         "--repr_weight"
             help = "Representation loss weight"
             arg_type = Float32
@@ -36,11 +36,11 @@ function parse_commandline()
         "--similarity_function"
             help = "RBF or cosine"
             arg_type = String
-            default = "cosine"
+            default = "linear"
         "--total_steps"
             help = "Total training steps"
             arg_type = Int
-            default = 100_000
+            default = 30_000
     end
 
     return parse_args(s)
@@ -106,30 +106,30 @@ function main()
         action = Vector{Float32} => (na,)
     ), demo_trajectory, 0.25)
 
-    const initial_learning_rate = 1e-3
-    const final_learning_rate = 1e-5
-    const decay_steps = 30000
-    const decay_rate = -log(final_learning_rate / initial_learning_rate) / decay_steps
+    # initial_learning_rate = 1e-4
+    # final_learning_rate = 1e-5
+    # decay_steps = 30000
+    # decay_rate = -log(final_learning_rate / initial_learning_rate) / decay_steps
 
-    lr_decay = ExpDecay(initial_learning_rate, decay_rate, decay_steps, 1e-5)
+    # lr_decay = ExpDecay(initial_learning_rate, decay_rate, decay_steps, 1e-5)
 
     agent = Agent(
         policy = TwinDelayedDDPGPolicy(
             behavior_actor = NeuralNetworkApproximator(
                 model = create_actor(visual, rng, ns, na),
-                optimizer = Flux.Optimise.Optimiser(ADAM(), lr_decay),
+                optimizer = ADAM(1e-3)
             ),
             behavior_critic = NeuralNetworkApproximator(
                 model = create_critic(visual, rng, ns, na),
-                optimizer = Flux.Optimise.Optimiser(ADAM(), lr_decay),
+                optimizer = ADAM(1e-3)
             ),
             target_actor = NeuralNetworkApproximator(
                 model = create_actor(visual, rng, ns, na),
-                optimizer = Flux.Optimise.Optimiser(ADAM(), lr_decay),
+                optimizer = ADAM(1e-3)
             ),
             target_critic = NeuralNetworkApproximator(
                 model = create_critic(visual, rng, ns, na),
-                optimizer = Flux.Optimise.Optimiser(ADAM(), lr_decay)
+                optimizer = ADAM(1e-3)
             ),
             teacher = teacher |> gpu,
             start_policy = RandomPolicy(Space([-1.0..1.0 for i=1:na]); rng = rng),
@@ -155,7 +155,7 @@ function main()
     );
 
     stop_condition = StopAfterStep(total_steps, is_show_progress=!haskey(ENV, "CI"));
-    hook = tensorboard_hook(env, agent, string("newer_logs/",run_name), save_checkpoints=true, agent_name=string("agents/visual/",run_name))
+    hook = tensorboard_hook(env, agent, string("logs/",run_name), save_checkpoints=true, agent_name=string("agents/visual/",run_name))
 
     pretrain_run(agent, env, stop_condition, hook)
 end

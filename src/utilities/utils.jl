@@ -30,11 +30,7 @@ end
 
 function save_agent(policy_agent, name, visual=false)
     actor = policy_agent.policy.behavior_actor.model |> cpu
-    if visual
-        critic = policy_agent.policy.behavior_critic.model.critic_nets[1] |> cpu
-    else
-        critic = policy_agent.policy.behavior_critic.model.critic_1
-    end
+    critic = policy_agent.policy.behavior_critic.model.critic_nets[1] |> cpu
     agent = ActorCriticPolicy{visual}(actor, critic);
     BSON.@save name agent;
 end
