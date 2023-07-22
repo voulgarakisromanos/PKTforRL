@@ -1,5 +1,5 @@
 include("../utilities/training_dependencies.jl")
-
+using Infiltrator
 
 function parse_commandline()
     s = ArgParseSettings()
@@ -8,15 +8,17 @@ function parse_commandline()
         "--env"
             help = "Environment name, e.g Lift or Door"
             arg_type = String
-            default = "Lift"
-        "--agent_name"
-            help = "Name of teacher agent"
+            default = "Door"
+        "--agent_names"
+            help = "Names of teacher agents, separated by commas"
             arg_type = String
-            default = ""
+            # default = ""
+            default = "Door"
         "--run_name"
             help = "Run name for logging purposes"
             arg_type = String
-            required = true
+            # required = true
+            default = "Run1"
         "--pre_steps"
             help = "Number of pretraining steps"
             arg_type = Int
@@ -51,7 +53,7 @@ function main()
 
     parsed_args = parse_commandline()
     env_name = parsed_args["env"]
-    agent_name = parsed_args["agent_name"]
+    agent_names = Tuple(split(parsed_args["agent_names"], ',')) # returns an array of agent names
     pretraining_steps = parsed_args["pre_steps"]
     representation_weight = parsed_args["repr_weight"]
     q_bc_weight = parsed_args["lambda"]
@@ -88,14 +90,18 @@ function main()
 
     BSON.@load string("datasets/", env_name, "_demo.bson") dataset
 
-    if agent_name == ""
-        BSON.@load string("agents/groundtruth/", env_name) agent
-        println(string("agents/groundtruth/", env_name))
-    else
-        BSON.@load string("agents/groundtruth/", agent_name) agent
-    end
 
-    teacher = agent
+     # Initialize an empty dictionary to store agents
+    teachers = Dict()
+
+     # Load each agent and store in the dictionary
+    for agent_name in agent_names
+        agent = nothing # This will hold the agent data
+        BSON.@load string("agents/groundtruth/", agent_name) agent
+        teachers[agent_name] = agent # Store the loaded agent in the dictionary
+    end
+    
+    # BSON.@load string("agents/groundtruth/", agent_name) agent
 
     demo_trajectory = dataset
 
@@ -131,7 +137,7 @@ function main()
                 model = create_critic(visual, rng, ns, na),
                 optimizer = ADAM(1e-3)
             ),
-            teacher = teacher |> gpu,
+            teacher = teachers |> gpu,
             start_policy = RandomPolicy(Space([-1.0..1.0 for i=1:na]); rng = rng),
             γ = 0.99f0,
             ρ = 0.99f0,

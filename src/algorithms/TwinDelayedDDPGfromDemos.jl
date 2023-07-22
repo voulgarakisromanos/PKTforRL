@@ -196,7 +196,9 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
 
     actor = p.behavior_actor
     critic = p.behavior_critic
-    teacher_actor = p.teacher.actor |> gpu
+
+    # teacher_actor = p.teacher.actor |> gpu
+    teachers_actors = Dict(k => v.actor |> gpu for (k, v) in p.teacher)
 
     target_noise =
         clamp.(
@@ -232,9 +234,16 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
             activations = actor.model[1:end-1](s)
             q_loss = -mean(critic(s, actions, 1))
             q_scale = mean(abs.(critic(s, a, 1)))
-            bc_loss = mean((actions .- teacher_actor(gt)) .^ 2)
+            
+            # bc_loss = mean((actions .- teacher_actor(gt)) .^ 2)
+            bc_loss = 0.0
+            representation_loss = 0.0
+            for (key, teacher_actor) in teachers_actors
+                bc_loss += mean((actions .- teacher_actor(gt)) .^ 2)
+                representation_loss = p.similarity_function(activations, teacher_actor[1:end-1](gt))
+            end
             l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(actor))
-            representation_loss = p.similarity_function(activations, teacher_actor[1:end-1](gt))
+            # representation_loss = p.similarity_function(activations, teacher_actor[1:end-1](gt))
             λ = p.q_bc_weight / (q_scale)
             # annealed_representation_weight = p.representation_weight * exp.(-p.update_step * 0.0002)
             loss = λ * q_loss + bc_loss + p.actor_l2_weight * l2_loss + p.representation_weight * representation_loss
