@@ -3,7 +3,9 @@ struct TwinDelayedDDPGBaseCritic
     critic_2::Flux.Chain
 end
 Flux.@functor TwinDelayedDDPGBaseCritic
-(c::TwinDelayedDDPGBaseCritic)(s, a) = (inp = vcat(s, a); (c.critic_1(inp), c.critic_2(inp)))
+function (c::TwinDelayedDDPGBaseCritic)(s, a)
+    (inp = vcat(s, a); (c.critic_1(inp), c.critic_2(inp)))
+end
 
 mutable struct TwinDelayedDDPGBasePolicy{
     BA<:NeuralNetworkApproximator,
@@ -13,7 +15,6 @@ mutable struct TwinDelayedDDPGBasePolicy{
     P,
     R<:AbstractRNG,
 } <: AbstractPolicy
-
     behavior_actor::BA
     behavior_critic::BC
     target_actor::TA
@@ -68,23 +69,23 @@ function TwinDelayedDDPGBasePolicy(;
     target_actor,
     target_critic,
     start_policy,
-    γ = 0.99f0,
-    ρ = 0.995f0,
-    batch_size = 64,
-    start_steps = 10000,
-    update_after = 1000,
-    update_freq = 50,
-    policy_freq = 2,
-    target_act_limit = 1.0,
-    target_act_noise = 0.1,
-    act_limit = 1.0,
-    act_noise = 0.1,
-    update_step = 0,
-    rng = Random.GLOBAL_RNG,
+    γ=0.99f0,
+    ρ=0.995f0,
+    batch_size=64,
+    start_steps=10000,
+    update_after=1000,
+    update_freq=50,
+    policy_freq=2,
+    target_act_limit=1.0,
+    target_act_noise=0.1,
+    act_limit=1.0,
+    act_noise=0.1,
+    update_step=0,
+    rng=Random.GLOBAL_RNG,
 )
     copyto!(behavior_actor, target_actor)  # force sync
     copyto!(behavior_critic, target_critic)  # force sync
-    TwinDelayedDDPGBasePolicy(
+    return TwinDelayedDDPGBasePolicy(
         behavior_actor,
         behavior_critic,
         target_actor,
@@ -119,8 +120,10 @@ function (p::TwinDelayedDDPGBasePolicy)(env)
         D = device(p.behavior_actor)
         s = state(env)
         s = Flux.unsqueeze(s, ndims(s) + 1)
-        action = p.behavior_actor(send_to_device(D, s)) |> vec |> send_to_host
-        clamp.(action .+ randn(p.rng, length(action)) .* p.act_noise, -p.act_limit, p.act_limit)
+        action = send_to_host(vec(p.behavior_actor(send_to_device(D, s))))
+        clamp.(
+            action .+ randn(p.rng, length(action)) .* p.act_noise, -p.act_limit, p.act_limit
+        )
     end
 end
 
@@ -130,10 +133,10 @@ function RLBase.update!(
     ::AbstractEnv,
     ::PreActStage,
 )
-    length(traj) > p.update_after || return
-    p.update_step % p.update_freq == 0 || return
+    length(traj) > p.update_after || return nothing
+    p.update_step % p.update_freq == 0 || return nothing
     inds, batch = sample(p.rng, traj, BatchSampler{SARTS}(p.batch_size))
-    update!(p, batch)
+    return update!(p, batch)
 end
 
 function RLBase.update!(p::TwinDelayedDDPGBasePolicy, batch::NamedTuple{SARTS})
@@ -143,34 +146,33 @@ function RLBase.update!(p::TwinDelayedDDPGBasePolicy, batch::NamedTuple{SARTS})
     actor = p.behavior_actor
     critic = p.behavior_critic
 
-    target_noise =
-    clamp.(
+    target_noise = to_device(clamp.(
         randn(p.rng, Float32, size(a)[1], p.batch_size) .* p.target_act_noise,
         -p.target_act_limit,
         p.target_act_limit,
-    ) |> to_device
+    ))
 
     # add noise and clip to act_limit bounds
     a′ = clamp.(p.target_actor(s′) + target_noise, -p.act_limit, p.act_limit)
 
     q_1′, q_2′ = p.target_critic(s′, a′)
-    y = r .+ p.γ .* (1 .- t) .* (min.(q_1′, q_2′) |> vec)
+    y = r .+ p.γ .* (1 .- t) .* (vec(min.(q_1′, q_2′)))
 
     # ad-hoc fix to https://github.com/JuliaReinforcementLearning/ReinforcementLearning.jl/issues/624
     if ndims(a) == 1
         a = Flux.unsqueeze(a, 1)
     end
-    
+
     gs1 = gradient(Flux.params(critic)) do
         q1, q2 = critic(s, a)
-        loss = Flux.mse(q1 |> vec, y) + Flux.mse(q2 |> vec, y)
+        loss = Flux.mse(vec(q1), y) + Flux.mse(vec(q2), y)
         Flux.ignore() do
             p.critic_loss = loss
         end
         loss
     end
     update!(critic, gs1)
-    
+
     if p.replay_counter % p.policy_freq == 0
         gs2 = gradient(Flux.params(actor)) do
             actions = actor(s)
@@ -183,13 +185,11 @@ function RLBase.update!(p::TwinDelayedDDPGBasePolicy, batch::NamedTuple{SARTS})
         update!(actor, gs2)
         # polyak averaging
         for (dest, src) in zip(
-            Flux.params([p.target_actor, p.target_critic]),
-            Flux.params([actor, critic]),
+            Flux.params([p.target_actor, p.target_critic]), Flux.params([actor, critic])
         )
             dest .= p.ρ .* dest .+ (1 - p.ρ) .* src
-                  
         end
         p.replay_counter = 1
     end
-    p.replay_counter += 1
+    return p.replay_counter += 1
 end

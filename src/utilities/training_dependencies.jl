@@ -5,7 +5,7 @@ using Flux
 using BSON
 using IntervalSets
 using TensorBoardLogger
-using Logging  
+using Logging
 using Robosuite
 using CircularArrayBuffers
 

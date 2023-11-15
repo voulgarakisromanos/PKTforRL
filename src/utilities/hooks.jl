@@ -5,7 +5,9 @@ using Random
 include("utils.jl")
 
 const SGART = (:state, :groundtruth, :action, :reward, :terminal)
-const SGARTSG = (:state, :groundtruth, :action, :reward, :terminal, :next_state, :next_groundtruth)
+const SGARTSG = (
+    :state, :groundtruth, :action, :reward, :terminal, :next_state, :next_groundtruth
+)
 
 """
 Circular Array Trajectory with State-Groundtruth-Action-Reward traces.
@@ -23,22 +25,28 @@ const CircularArraySGARTTrajectory = Trajectory{
     },
 }
 
-CircularArraySGARTTrajectory(;
+function CircularArraySGARTTrajectory(;
     capacity::Int,
-    state = Int => (),
-    groundtruth = Int = (),
-    action = Int => (),
-    reward = Float32 => (),
-    terminal = Bool => (),
-) = merge(
-    CircularArrayTrajectory(; capacity = capacity + 1, state = state, groundtruth = groundtruth, action = action),
-    CircularArrayTrajectory(; capacity = capacity, reward = reward, terminal = terminal),
+    state=Int => (),
+    groundtruth=Int = (),
+    action=Int => (),
+    reward=Float32 => (),
+    terminal=Bool => (),
 )
+    return merge(
+        CircularArrayTrajectory(;
+            capacity=capacity + 1, state=state, groundtruth=groundtruth, action=action
+        ),
+        CircularArrayTrajectory(; capacity=capacity, reward=reward, terminal=terminal),
+    )
+end
 
-function StatsBase.sample(rng::AbstractRNG, t::CircularArraySGARTTrajectory, s::BatchSampler)
+function StatsBase.sample(
+    rng::AbstractRNG, t::CircularArraySGARTTrajectory, s::BatchSampler
+)
     inds = rand(rng, 1:length(t), s.batch_size)
     fetch!(s, t, inds)
-    inds, s.cache
+    return inds, s.cache
 end
 
 function fetch!(s::BatchSampler, t::CircularArraySGARTTrajectory, inds::Vector{Int})
@@ -65,15 +73,20 @@ mutable struct SampleTrajectory{include_groundtruth} <: AbstractHook
 end
 
 function (hook::SampleTrajectory{false})(::PreActStage, agent, env, action)
-    push!(hook.t, state=state(env), action=action)
+    return push!(hook.t; state=state(env), action=action)
 end
 
 function (hook::SampleTrajectory{true})(::PreActStage, agent, env, action)
-    push!(hook.t, state=state(env), groundtruth=vcat(vec(env.proprioception_state), vec(env.object_state)), action=action)
+    return push!(
+        hook.t;
+        state=state(env),
+        groundtruth=vcat(vec(env.proprioception_state), vec(env.object_state)),
+        action=action,
+    )
 end
 
 function (hook::SampleTrajectory)(::PostActStage, agent, env)
-    push!(hook.t, reward=reward(env), terminal=is_terminated(env))
+    return push!(hook.t; reward=reward(env), terminal=is_terminated(env))
 end
 
 mutable struct StateImageTransition <: AbstractHook
@@ -81,11 +94,11 @@ mutable struct StateImageTransition <: AbstractHook
 end
 
 function (hook::StateImageTransition)(::PreActStage, agent, env, action)
-    push!(hook.t, state=env.grayscale, action=action[1])
+    return push!(hook.t; state=env.grayscale, action=action[1])
 end
 
 function (hook::StateImageTransition)(::PostActStage, agent, env)
-    push!(hook.t, reward=reward(env), terminal=is_terminated(env))
+    return push!(hook.t; reward=reward(env), terminal=is_terminated(env))
 end
 
 Base.@kwdef mutable struct SuccessRateHook <: AbstractHook
@@ -101,29 +114,46 @@ function (hook::SuccessRateHook)(::PostEpisodeStage, agent, env)
     success = hook.success_criterion()
     push!(hook.recent_successes, success)
     cumulative_success_rate = sum(hook.recent_successes) / hook.num_episodes
-    log_value(hook.logger, "success_rate/cumulative_success_rate", cumulative_success_rate; step=hook.num_episodes)
-    log_value(hook.logger, "success_rate/successful_episodes", sum(success); step=hook.num_episodes)
+    log_value(
+        hook.logger,
+        "success_rate/cumulative_success_rate",
+        cumulative_success_rate;
+        step=hook.num_episodes,
+    )
+    return log_value(
+        hook.logger,
+        "success_rate/successful_episodes",
+        sum(success);
+        step=hook.num_episodes,
+    )
 end
 
-function tensorboard_hook(env, agent, tf_log_dir="logs/Lift"; save_checkpoints=false, save_frequency=20_000, agent_name="agents/visual/")
-    lg = TBLogger(tf_log_dir, min_level = Logging.Info)
+function tensorboard_hook(
+    env,
+    agent,
+    tf_log_dir="logs/Lift";
+    save_checkpoints=false,
+    save_frequency=20_000,
+    agent_name="agents/visual/",
+)
+    lg = TBLogger(tf_log_dir; min_level=Logging.Info)
     total_reward_per_episode = TotalRewardPerEpisode()
     total_reward_per_episode.rewards = [0.0]
-    hook = ComposedHook(
+    return hook = ComposedHook(
         total_reward_per_episode,
         DoEveryNStep() do t, agent, env
             with_logger(lg) do
-                @info  "losses" agent.policy.critic_loss agent.policy.critic_q_loss agent.policy.critic_l2_loss agent.policy.actor_loss agent.policy.actor_q_loss agent.policy.actor_bc_loss agent.policy.actor_l2_loss agent.policy.representation_loss
+                @info "losses" agent.policy.critic_loss agent.policy.critic_q_loss agent.policy.critic_l2_loss agent.policy.actor_loss agent.policy.actor_q_loss agent.policy.actor_bc_loss agent.policy.actor_l2_loss agent.policy.representation_loss
             end
             if t % save_frequency == 0
-                save_agent(agent, string(agent_name,"_",string(t)))
-            end 
+                save_agent(agent, string(agent_name, "_", string(t)))
+            end
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
-                @info  "reward" total_reward_per_episode.rewards[end]
+                @info "reward" total_reward_per_episode.rewards[end]
             end
         end,
-        SuccessRateHook(success_criterion=()->env.success, logger=lg)
+        SuccessRateHook(; success_criterion=() -> env.success, logger=lg),
     )
 end

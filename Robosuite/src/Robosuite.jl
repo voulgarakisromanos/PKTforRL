@@ -26,10 +26,22 @@ mutable struct RoboticEnv{T<:AbstractFloat,enable_visual} <: AbstractEnv
     success::Bool
 end
 
-function RoboticEnv(; name="Lift", robots="Panda", controller="OSC_POSE", show=false, T=Float32, enable_visual=false, horizon=500, image_size=84, frame_stack_size=3, control_freq=20, stop_when_done=false)
+function RoboticEnv(;
+    name="Lift",
+    robots="Panda",
+    controller="OSC_POSE",
+    show=false,
+    T=Float32,
+    enable_visual=false,
+    horizon=500,
+    image_size=84,
+    frame_stack_size=3,
+    control_freq=20,
+    stop_when_done=false,
+)
     suite = pyimport("robosuite")
-    config = suite.load_controller_config(default_controller=controller)
-    ptr = suite.make(
+    config = suite.load_controller_config(; default_controller=controller)
+    ptr = suite.make(;
         env_name=name, # try with other tasks like "Stack" and "Door"
         robots=robots,  # try with other robots like "Sawyer" and "Jaco"
         render_camera="agentview",
@@ -44,19 +56,34 @@ function RoboticEnv(; name="Lift", robots="Panda", controller="OSC_POSE", show=f
         horizon=horizon,
         hard_reset=false,
         reward_scale=1.0,
-        controller_configs=config
+        controller_configs=config,
     )
     degrees_of_freedom = pyconvert(Int, ptr.action_dim)
     image_buffer = StackFrames(T, image_size, image_size, frame_stack_size)
     obs, _, _, _ = ptr.step(rand(degrees_of_freedom))
-    proprioception_size = size(pyconvert(Vector, obs["robot0_proprio-state"]))[1]    
+    proprioception_size = size(pyconvert(Vector, obs["robot0_proprio-state"]))[1]
     proprioception_state = Vector{T}(undef, proprioception_size)
-    object_size = size(pyconvert(Vector, obs["object-state"]))[1]    
+    object_size = size(pyconvert(Vector, obs["object-state"]))[1]
     object_state = Vector{T}(undef, object_size)
     reward = T(0)
     done = false
     success = false
-    return RoboticEnv{T,enable_visual}(ptr, enable_visual, show, degrees_of_freedom, image_buffer, proprioception_state, object_state, reward, done, frame_stack_size, 0, horizon, stop_when_done, success)
+    return RoboticEnv{T,enable_visual}(
+        ptr,
+        enable_visual,
+        show,
+        degrees_of_freedom,
+        image_buffer,
+        proprioception_state,
+        object_state,
+        reward,
+        done,
+        frame_stack_size,
+        0,
+        horizon,
+        stop_when_done,
+        success,
+    )
 end
 
 function common_env_procedure(env::RoboticEnv{T}, action::Vector) where {T}
@@ -65,7 +92,7 @@ function common_env_procedure(env::RoboticEnv{T}, action::Vector) where {T}
     env.done = pyconvert(Bool, done)
     if env.timestep > env.horizon || env.reward < 1e-5
         env.done = true
-    elseif env.reward == 1.0 && env.stop_when_done 
+    elseif env.reward == 1.0 && env.stop_when_done
         env.done = true
         env.reward = env.horizon - env.timestep
         env.success = true
@@ -79,25 +106,32 @@ function common_env_procedure(env::RoboticEnv{T}, action::Vector) where {T}
     return obs
 end
 
-(env::RoboticEnv{T,false})(action::Vector) where {T<:Number} = common_env_procedure(env, action)
+function (env::RoboticEnv{T,false})(action::Vector) where {T<:Number}
+    return common_env_procedure(env, action)
+end
 
-function (env::RoboticEnv{T,true})(action::Vector) where {T<:Number} 
+function (env::RoboticEnv{T,true})(action::Vector) where {T<:Number}
     obs = common_env_procedure(env, action)
-    env.image_buffer(convert_ndarray_to_grayscale(obs["agentview_image"])) 
+    return env.image_buffer(convert_ndarray_to_grayscale(obs["agentview_image"]))
 end
 
 function convert_ndarray_to_grayscale(obs)
-    x = pyconvert(Array, obs)./255.0f0
-    x = permutedims(x, [3,1,2])
+    x = pyconvert(Array, obs) ./ 255.0f0
+    x = permutedims(x, [3, 1, 2])
     x = colorview(RGB, x)
-    x = Gray.(x)
+    return x = Gray.(x)
 end
 
 function RLBase.state_space(env::RoboticEnv{T}) where {T<:Number}
-    return Space([-1.0 .. 1.0 for i = 1:(size(env.proprioception_state)[1]+size(env.object_state)[1])])
+    return Space([
+        -1.0 .. 1.0 for
+        i in 1:(size(env.proprioception_state)[1] + size(env.object_state)[1])
+    ])
 end
 
-RLBase.action_space(env::RoboticEnv) = Space([-1.0 .. 1.0 for i = 1:env.degrees_of_freedom])
+function RLBase.action_space(env::RoboticEnv)
+    return Space([-1.0 .. 1.0 for i in 1:(env.degrees_of_freedom)])
+end
 RLBase.reward(env::RoboticEnv) = env.reward
 RLBase.is_terminated(env::RoboticEnv) = env.done
 
@@ -116,12 +150,14 @@ function RLBase.reset!(env::RoboticEnv{T}) where {T<:Number}
     env.done = false
     env.success = false
     env.timestep = 0
-    for i=1:env.frame_stack_size
+    for i in 1:(env.frame_stack_size)
         env(T.(zeros(env.degrees_of_freedom)))
     end
 end
 
-get_groundtruth_state(env::RoboticEnv) = vcat(vec(env.proprioception_state), vec(env.object_state))
+function get_groundtruth_state(env::RoboticEnv)
+    return vcat(vec(env.proprioception_state), vec(env.object_state))
+end
 
 Base.close(env::RoboticEnv) = env.ptr.close()
 Base.show(env::RoboticEnv) = env.ptr.render()
