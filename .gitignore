@@ -4,6 +4,7 @@
 *.so
 .CondaPkg
 images/
+logs/
 log/
 .vscode/
 *.wbproj
