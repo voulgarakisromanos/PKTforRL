@@ -1,72 +1,64 @@
-using Statistics
-using Random
-using Robosuite: get_groundtruth_state
-
 struct TwinDelayedDDPGCritic{visual}
     critic_nets::Vector{Flux.Chain}
 end
 
 Flux.@functor TwinDelayedDDPGCritic
 function (c::TwinDelayedDDPGCritic{false})(s, a)
-    (inp = vcat(s, a); (c.critic_nets[1](inp), c.critic_nets[2](inp)))
+    return (inp = vcat(s, a); (c.critic_nets[1](inp), c.critic_nets[2](inp)))
 end
 function (c::TwinDelayedDDPGCritic{false})(s, a, critic_selection::Int)
-    (inp = vcat(s, a); (c.critic_nets[critic_selection](inp)))
+    return (inp = vcat(s, a); (c.critic_nets[critic_selection](inp)))
 end
 function (c::TwinDelayedDDPGCritic{true})(s, a)
-    (inp = (s, a); (c.critic_nets[1](inp), c.critic_nets[2](inp)))
+    return (inp = (s, a); (c.critic_nets[1](inp), c.critic_nets[2](inp)))
 end
 function (c::TwinDelayedDDPGCritic{true})(s, a, critic_selection::Int)
-    (inp = (s, a); (c.critic_nets[critic_selection](inp)))
+    return (inp = (s, a); (c.critic_nets[critic_selection](inp)))
 end
 
-mutable struct TwinDelayedDDPGPolicy{
-    BA<:NeuralNetworkApproximator,
-    BC<:NeuralNetworkApproximator,
-    TA<:NeuralNetworkApproximator,
-    TC<:NeuralNetworkApproximator,
-    P,
-    R<:AbstractRNG,
-} <: AbstractPolicy
-    behavior_actor::BA
-    behavior_critic::BC
-    target_actor::TA
-    target_critic::TC
+mutable struct LossStruct{T}
+    critic_loss::T
+    critic_q_loss::T
+    critic_l2_loss::T
+    actor_loss::T
+    actor_q_loss::T
+    actor_bc_loss::T
+    actor_l2_loss::T
+    distill_loss::T
+end
+
+@concrete struct TwinDelayedDDPGPolicy <: AbstractPolicy
+    behavior_actor
+    behavior_critic
+    target_actor
+    target_critic
     teacher
-    γ::Float32
-    ρ::Float32
-    batch_size::Int
-    start_steps::Int
-    start_policy::P
-    pretraining_steps::Int
-    update_freq::Int
-    policy_freq::Int
-    target_act_limit::Float64
-    target_act_noise::Float64
-    act_limit::Float64
-    act_noise::Float64
-    update_step::Int
-    rng::R
-    replay_counter::Int
-    q_bc_weight::Float32
-    critic_l2_weight::Float32
-    actor_l2_weight::Float32
-    representation_weight::Float32
-    similarity_function::Function
-    distill_layer::Int
-    # for logging
-    critic_loss::Float32
-    critic_q_loss::Float32
-    critic_l2_loss::Float32
-    actor_loss::Float32
-    actor_q_loss::Float32
-    actor_bc_loss::Float32
-    actor_l2_loss::Float32
-    representation_loss::Float32
+    γ
+    ρ
+    batch_size
+    start_steps
+    start_policy
+    pretraining_steps
+    update_freq
+    policy_freq
+    target_act_limit
+    target_act_noise
+    act_limit
+    act_noise
+    step_counter
+    rng
+    policy_update_counter
+    q_bc_weight
+    critic_l2_weight
+    actor_l2_weight
+    distill_weight
+    similarity_function
+    distill_layer
+    loss_struct
 end
 
 """
-TwinDelayedDDPGCritic(;kwargs...)
+TwinDelayedDDPGPolicy(;kwargs...)
 
 # Keyword arguments
 
@@ -74,20 +66,31 @@ TwinDelayedDDPGCritic(;kwargs...)
 - `behavior_critic`,
 - `target_actor`,
 - `target_critic`,
-- `start_policy`,
+- `teacher`,
 - `γ = 0.99f0`,
 - `ρ = 0.995f0`,
-- `batch_size = 32`,
-- `start_steps = 10000`,
-- `update_after = 1000`,
-- `update_freq = 50`,
-- `policy_freq = 2` # frequency in which the actor performs a gradient update_step and critic target is updated
-- `target_act_limit = 1.0`, # noise added to actor target
-- `target_act_noise = 0.1`, # noise added to actor target
-- `act_limit = 1.0`, # noise added when outputing action
-- `act_noise = 0.1`, # noise added when outputing action
-- `update_step = 0`,
-- `rng = Random.GLOBAL_RNG`,
+- `batch_size = 256`,
+- `start_steps`,
+- `start_policy`,
+- `pretraining_steps`,
+- `update_freq`, # how many env interactions are needed before updating
+- `policy_freq`, # how many critic updates are needed before updating the policy
+- `target_act_limit`, # noise added to actor target
+- `target_act_noise`, # noise added to actor target
+- `act_limit`, # noise added when outputing action
+- `act_noise`, # noise added when outputing action
+- `step_counter`,
+- `rng`,
+- `policy_update_counter`,
+- `q_bc_weight`,
+- `critic_l2_weight`,
+- `actor_l2_weight`,
+- `distill_weight`,
+- `similarity_function`,
+- `distill_layer`,
+- `for logging`,
+- `loss_struct` # for logging purposes
+
 """
 function TwinDelayedDDPGPolicy(;
     behavior_actor,
@@ -107,16 +110,16 @@ function TwinDelayedDDPGPolicy(;
     target_act_noise=0.1,
     act_limit=1.0,
     act_noise=0.1,
-    update_step=0,
     rng=Random.GLOBAL_RNG,
     q_bc_weight=1.0,
     critic_l2_weight=1.0,
     actor_l2_weight=1.0,
-    representation_weight=1.0,
+    distill_weight=1.0,
     similarity_function,
+    distill_layer,
 )
-    copyto!(behavior_actor, target_actor)  # force sync
-    copyto!(behavior_critic, target_critic)  # force sync
+    copyto!(behavior_actor, target_actor) 
+    copyto!(behavior_critic, target_critic)
     return TwinDelayedDDPGPolicy(
         behavior_actor,
         behavior_critic,
@@ -135,20 +138,21 @@ function TwinDelayedDDPGPolicy(;
         target_act_noise,
         act_limit,
         act_noise,
-        update_step,
+        Ref(0),
         rng,
-        1, # keep track of numbers of replay
+        Ref(1),
         q_bc_weight,
         critic_l2_weight,
         actor_l2_weight,
-        representation_weight,
+        distill_weight,
         similarity_function,
-        zeros(Float32, 8)...,
+        distill_layer,
+        LossStruct(zeros(Float32, 8)...),
     )
 end
 
 function (p::TwinDelayedDDPGPolicy)(env)
-    if p.update_step <= p.start_steps
+    if p.step_counter[] <= p.start_steps
         p.start_policy(env)
     else
         D = device(p.behavior_actor)
@@ -162,7 +166,7 @@ function (p::TwinDelayedDDPGPolicy)(env)
 end
 
 function training_step(p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory)
-    p.update_step % p.update_freq == 0 || return nothing
+    p.step_counter[] % p.update_freq == 0 || return nothing
     length(traj) > (p.batch_size) || return nothing
 
     demo_sample_length = Int(round(traj.ratio * p.batch_size))
@@ -188,17 +192,23 @@ end
 function RLBase.update!(
     p::TwinDelayedDDPGPolicy, traj::CombinedTrajectory, ::AbstractEnv, ::PreActStage
 )
-    p.update_step += 1
+    p.step_counter[] += 1
 
-    if p.update_step > p.pretraining_steps  # Sampling mix of demonstrations and acquired transitions
+    if p.step_counter[] > p.pretraining_steps  # Sampling mix of demonstrations and acquired transitions
         training_step(p, traj)
-    elseif p.update_step <= p.pretraining_steps # Pretraining
+    elseif p.step_counter[] <= p.pretraining_steps # Pretraining
         pretraining_step(p, traj)
     end
 end
 
+"""
+RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
+
+# Keyword arguments
+- `p::TwinDelayedDDPGPolicy`,
+- `batch::NamedTuple`
+"""
 function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
-    @infiltrate
     to_device(x) = send_to_device(device(p.behavior_actor), x)
     s, gt, a, r, t, s′, gt′ = to_device(batch)
 
@@ -207,11 +217,13 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
 
     teacher_actor = gpu(p.teacher.actor)
 
-    target_noise = to_device(clamp.(
-        randn(p.rng, Float32, size(a)[1], p.batch_size) .* p.target_act_noise,
-        -p.target_act_limit,
-        p.target_act_limit,
-    ))
+    target_noise = to_device(
+        clamp.(
+            randn(p.rng, Float32, size(a)[1], p.batch_size) .* p.target_act_noise,
+            -p.target_act_limit,
+            p.target_act_limit,
+        ),
+    )
 
     a′ = clamp.(p.target_actor(s′) + target_noise, -p.act_limit, p.act_limit)
     q_1′, q_2′ = p.target_critic(s′, a′)
@@ -223,23 +235,23 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
         l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(critic))
         loss = q_loss + p.critic_l2_weight * l2_loss
         Flux.ignore() do
-            p.critic_loss = loss
-            p.critic_q_loss = q_loss
-            p.critic_l2_loss = l2_loss
+            p.loss_struct.critic_loss = loss
+            p.loss_struct.critic_q_loss = q_loss
+            p.loss_struct.critic_l2_loss = l2_loss
         end
         loss
     end
 
     update!(critic, gs1)
 
-    if p.replay_counter % p.policy_freq == 0
+    if p.policy_update_counter[] % p.policy_freq == 0
         gs2 = gradient(Flux.params(actor)) do
             actions = actor(s)
             activations = actor.model[1:(end - p.distill_layer)](s)
             q_loss = -mean(critic(s, actions, 1))
             q_scale = mean(abs.(critic(s, a, 1)))
             bc_loss = mean((actions .- teacher_actor(gt)) .^ 2)
-            representation_loss = p.similarity_function(
+            distill_loss = p.similarity_function(
                 activations, teacher_actor[1:(end - p.distill_layer)](gt)
             )
             l2_loss = sum(x -> sum(abs2, x) / 2, Flux.params(actor))
@@ -248,13 +260,13 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
                 λ * q_loss +
                 bc_loss +
                 p.actor_l2_weight * l2_loss +
-                p.representation_weight * representation_loss
+                p.distill_weight * distill_loss
             Flux.ignore() do
-                p.actor_loss = loss
-                p.actor_q_loss = q_loss
-                p.actor_bc_loss = bc_loss
-                p.actor_l2_loss = l2_loss
-                p.representation_loss = representation_loss
+                p.loss_struct.actor_loss = loss
+                p.loss_struct.actor_q_loss = q_loss
+                p.loss_struct.actor_bc_loss = bc_loss
+                p.loss_struct.actor_l2_loss = l2_loss
+                p.loss_struct.distill_loss = distill_loss
             end
             loss
         end
@@ -266,9 +278,9 @@ function RLBase.update!(p::TwinDelayedDDPGPolicy, batch::NamedTuple)
         )
             dest .= p.ρ .* dest .+ (1 - p.ρ) .* src
         end
-        p.replay_counter = 1
+        p.policy_update_counter[] = 1
     end
-    return p.replay_counter += 1
+    return p.policy_update_counter[] += 1
 end
 
 function pretrain(agent::AbstractPolicy, steps::Int)
@@ -283,7 +295,7 @@ function pretrain_run(
     stop_condition=StopAfterEpisode(1),
     hook=EmptyHook(),
 )
-    while agent.policy.update_step < agent.policy.pretraining_steps
+    while agent.policy.step_counter[] < agent.policy.pretraining_steps
         update!(agent.policy, agent.trajectory, env, PRE_ACT_STAGE)
         hook(POST_ACT_STAGE, agent, env)
     end

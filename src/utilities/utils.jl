@@ -1,8 +1,3 @@
-using ReinforcementLearning
-using Tullio
-using CUDA, CUDAKernels, KernelAbstractions
-using Flux
-
 struct ActorCriticPolicy{visual_agent} <: AbstractPolicy
     actor
     critic

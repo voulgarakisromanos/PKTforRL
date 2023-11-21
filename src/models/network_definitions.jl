@@ -1,29 +1,28 @@
-using Flux
-using Random
-
-include("../algorithms/TwinDelayedDDPGfromDemos.jl")
-
 function create_actor(visual::Bool, rng::AbstractRNG, state_size::Int, action_size::Int)
     init = glorot_uniform(rng)
     if visual
-        gpu(Chain(
-            Conv((3, 3), 3 => 32, relu; stride=1, pad=0, init=init, bias=false),
-            Conv((3, 3), 32 => 32, relu; stride=1, pad=0, init=init, bias=false),
-            MaxPool((4, 4)),
-            Conv((3, 3), 32 => 64, relu; stride=1, pad=0, init=init, bias=false),
-            Conv((3, 3), 64 => 64, relu; stride=1, pad=0, init=init, bias=false),
-            MaxPool((4, 4)),
-            Flux.flatten,
-            Dense(256, 60, relu; init=init),
-            Dense(60, 60, relu; init=init),
-            Dense(60, action_size, tanh; init=init),
-        ))
+        gpu(
+            Chain(
+                Conv((3, 3), 3 => 32, relu; stride=1, pad=0, init=init, bias=false),
+                Conv((3, 3), 32 => 32, relu; stride=1, pad=0, init=init, bias=false),
+                MaxPool((4, 4)),
+                Conv((3, 3), 32 => 64, relu; stride=1, pad=0, init=init, bias=false),
+                Conv((3, 3), 64 => 64, relu; stride=1, pad=0, init=init, bias=false),
+                MaxPool((4, 4)),
+                Flux.flatten,
+                Dense(256, 60, relu; init=init),
+                Dense(60, 60, relu; init=init),
+                Dense(60, action_size, tanh; init=init),
+            ),
+        )
     else
-        gpu(Chain(
-            Dense(state_size, 60, relu; init=init),
-            Dense(60, 60, relu; init=init),
-            Dense(60, action_size, tanh; init=init),
-        ))
+        gpu(
+            Chain(
+                Dense(state_size, 60, relu; init=init),
+                Dense(60, 60, relu; init=init),
+                Dense(60, action_size, tanh; init=init),
+            ),
+        )
     end
 end
 
@@ -32,29 +31,39 @@ function create_critic_model(
 )
     init = glorot_uniform(rng)
     if visual
-        gpu(Chain(
-            CombineActionImageEmbedding(
-                Chain(
-                    Conv((3, 3), 3 => 32, relu; stride=1, pad=0, init=init, bias=false),
-                    Conv((3, 3), 32 => 32, relu; stride=1, pad=0, init=init, bias=false),
-                    MaxPool((4, 4)),
-                    Conv((3, 3), 32 => 64, relu; stride=1, pad=0, init=init, bias=false),
-                    Conv((3, 3), 64 => 64, relu; stride=1, pad=0, init=init, bias=false),
-                    MaxPool((4, 4)),
-                    Flux.flatten,
+        gpu(
+            Chain(
+                CombineActionImageEmbedding(
+                    Chain(
+                        Conv((3, 3), 3 => 32, relu; stride=1, pad=0, init=init, bias=false),
+                        Conv(
+                            (3, 3), 32 => 32, relu; stride=1, pad=0, init=init, bias=false
+                        ),
+                        MaxPool((4, 4)),
+                        Conv(
+                            (3, 3), 32 => 64, relu; stride=1, pad=0, init=init, bias=false
+                        ),
+                        Conv(
+                            (3, 3), 64 => 64, relu; stride=1, pad=0, init=init, bias=false
+                        ),
+                        MaxPool((4, 4)),
+                        Flux.flatten,
+                    ),
+                    vcat,
                 ),
-                vcat,
+                Dense(256 + action_size, 60, relu; init=init),
+                Dense(60, 60, relu; init=init),
+                Dense(60, 1; init=init),
             ),
-            Dense(256 + action_size, 60, relu; init=init),
-            Dense(60, 60, relu; init=init),
-            Dense(60, 1; init=init),
-        ))
+        )
     else
-        gpu(Chain(
-            Dense(state_size + action_size, 30, relu; init=init),
-            Dense(30, 30, relu; init=init),
-            Dense(30, 1; init=init),
-        ))
+        gpu(
+            Chain(
+                Dense(state_size + action_size, 30, relu; init=init),
+                Dense(30, 30, relu; init=init),
+                Dense(30, 1; init=init),
+            ),
+        )
     end
 end
 

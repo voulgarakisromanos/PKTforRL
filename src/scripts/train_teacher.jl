@@ -68,20 +68,24 @@ init = glorot_uniform(rng)
 na, ns = size(action_space(env))[1], size(state_space(env))[1]
 
 function create_actor()
-    return gpu(Chain(
-        Dense(ns, 60, relu; init=init),
-        Dense(60, 60, relu; init=init),
-        Dense(60, na, tanh; init=init),
-    ))
+    return gpu(
+        Chain(
+            Dense(ns, 60, relu; init=init),
+            Dense(60, 60, relu; init=init),
+            Dense(60, na, tanh; init=init),
+        ),
+    )
 end
 
 function create_critic_model()
-    return gpu(Chain(
-        Dense(ns + na, 60, relu; init=init),
-        Dense(60, 60, relu; init=init),
-        Dense(60, 1; init=init),
-        vec,
-    ))
+    return gpu(
+        Chain(
+            Dense(ns + na, 60, relu; init=init),
+            Dense(60, 60, relu; init=init),
+            Dense(60, 1; init=init),
+            vec,
+        ),
+    )
 end
 
 create_critic() = TwinDelayedDDPGBaseCritic(create_critic_model(), create_critic_model())

@@ -2,7 +2,12 @@
 
 julia_version = "1.9.4"
 manifest_format = "2.0"
-project_hash = "41c35d6b5862d61bf3a451db68905af837a3e037"
+project_hash = "6b39d5e896357f6b8dbaf22d664e3a240690f12d"
+
+[[deps.ANSIColoredPrinters]]
+git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
+uuid = "a4c015fc-c6ff-483c-b24f-f7ea428134e9"
+version = "0.0.1"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -527,6 +532,12 @@ git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.9.3"
 
+[[deps.Documenter]]
+deps = ["ANSIColoredPrinters", "Base64", "Dates", "DocStringExtensions", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
+git-tree-sha1 = "39fd748a73dce4c05a9655475e437170d8fb1b67"
+uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+version = "0.27.25"
+
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
@@ -859,6 +870,12 @@ deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
 git-tree-sha1 = "f218fe3736ddf977e0e772bc9a586b2383da2685"
 uuid = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
 version = "0.3.23"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "d75853a0bdbfb1ac815478bacd89cd27b550ace6"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.3"
 
 [[deps.IRTools]]
 deps = ["InteractiveUtils", "MacroTools", "Test"]
@@ -1564,6 +1581,12 @@ git-tree-sha1 = "f6f85a2edb9c356b829934ad3caed2ad0ebbfc99"
 uuid = "90014a1f-27ba-587c-ab20-58faa44d9150"
 version = "0.11.29"
 
+[[deps.PKTforRL]]
+deps = ["ArcadeLearningEnvironment", "ArgParse", "BSON", "BenchmarkTools", "CSV", "CUDA", "CUDAKernels", "CircularArrayBuffers", "ClosedIntervals", "ConcreteStructs", "DataFrames", "Debugger", "Distributions", "FileIO", "Flux", "ImageIO", "Images", "Infiltrator", "IntervalSets", "KernelAbstractions", "Logging", "MLUtils", "Optim", "Optimisers", "PackageCompiler", "Plots", "Random", "ReinforcementLearning", "ReinforcementLearningZoo", "RelocatableFolders", "Robosuite", "StableRNGs", "Statistics", "StatsBase", "TensorBoardLogger", "Tullio", "Zygote"]
+path = ".."
+uuid = "2ff85c60-8a57-4121-a84f-c1b7f30d9a34"
+version = "0.0.1-DEV"
+
 [[deps.PNGFiles]]
 deps = ["Base64", "CEnum", "ImageCore", "IndirectArrays", "OffsetArrays", "libpng_jll"]
 git-tree-sha1 = "5ded86ccaf0647349231ed6c0822c10886d4a1ee"
@@ -1887,7 +1910,7 @@ version = "0.4.0+0"
 
 [[deps.Robosuite]]
 deps = ["CircularArrayBuffers", "Images", "IntervalSets", "PythonCall", "ReinforcementLearning"]
-path = "Robosuite"
+path = "../Robosuite"
 uuid = "e69a2981-3bb8-43df-a6c0-21e071445437"
 version = "0.1.0"
 

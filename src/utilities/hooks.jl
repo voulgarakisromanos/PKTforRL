@@ -1,16 +1,10 @@
-using ReinforcementLearning
-using StatsBase
-using Random
-
-include("utils.jl")
-
 const SGART = (:state, :groundtruth, :action, :reward, :terminal)
 const SGARTSG = (
     :state, :groundtruth, :action, :reward, :terminal, :next_state, :next_groundtruth
 )
 
 """
-Circular Array Trajectory with State-Groundtruth-Action-Reward traces.
+Circular Array Trajectory with State-Groundtruth-Action-Reward-Terminal traces.
 """
 const CircularArraySGARTTrajectory = Trajectory{
     <:NamedTuple{
@@ -128,6 +122,9 @@ function (hook::SuccessRateHook)(::PostEpisodeStage, agent, env)
     )
 end
 
+"""
+Logs statistics, rewards, losses etc. in tensorboard
+"""
 function tensorboard_hook(
     env,
     agent,
@@ -143,7 +140,7 @@ function tensorboard_hook(
         total_reward_per_episode,
         DoEveryNStep() do t, agent, env
             with_logger(lg) do
-                @info "losses" agent.policy.critic_loss agent.policy.critic_q_loss agent.policy.critic_l2_loss agent.policy.actor_loss agent.policy.actor_q_loss agent.policy.actor_bc_loss agent.policy.actor_l2_loss agent.policy.representation_loss
+                @info "losses" agent.policy.loss_struct.critic_loss agent.policy.loss_struct.critic_q_loss agent.policy.loss_struct.critic_l2_loss agent.policy.loss_struct.actor_loss agent.policy.loss_struct.actor_q_loss agent.policy.loss_struct.actor_bc_loss agent.policy.loss_struct.actor_l2_loss agent.policy.loss_struct.representation_loss
             end
             if t % save_frequency == 0
                 save_agent(agent, string(agent_name, "_", string(t)))
